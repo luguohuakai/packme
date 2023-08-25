@@ -13,7 +13,7 @@
 
 use Alchemy\Zippy\Zippy;
 
-require __DIR__ . '/vendor/autoload.php';
+require './vendor/autoload.php';
 
 /**
  * log info
@@ -79,11 +79,6 @@ class Ini
         return $this->all[$key] ?? $default;
     }
 
-    public function getAll()
-    {
-        return $this->all;
-    }
-
     public function set($key, $value): bool
     {
         $data = array_merge($this->all, [$key => $value]);
@@ -112,8 +107,131 @@ class Git
     private string $cmd_hash_short = 'git rev-list HEAD --abbrev-commit --max-count=1';
     private string $cmd_hash_long = 'git rev-parse HEAD';
     private string $cmd_branch_name = 'git symbolic-ref --short -q HEAD';
-    private string $cmd_pack = 'git archive %s %s --output=%s';
     private string $cmd_name = 'git rev-parse --show-toplevel';
+
+    private string $output;
+    private array $add_file = [];
+    private string $format;
+    private string $branch;
+
+    private string $new_commit = '';
+    private string $old_commit = '';
+
+    // 默认打包于当前目录下的dist目录内
+    private string $dist = './dist/';
+
+    public string $cmd = '';
+
+    /**
+     * @param string $output 输出文件名 如: update.tar.gz
+     * @return $this
+     */
+    public function output(string $output): Git
+    {
+        $this->output = $output;
+        return $this;
+    }
+
+    public function getOutPutFile(): string
+    {
+        return $this->dist . $this->output;
+    }
+
+    /**
+     * 需要额外打包的文件 可添加多个
+     * @param string $add_file 当前路径下的文件全路径 如: data/demo.sql
+     * @return $this
+     */
+    public function addFile(string $add_file): Git
+    {
+        $this->add_file = array_merge($this->add_file, [$add_file]);
+        return $this;
+    }
+
+    /**
+     * 指定打包文件格式
+     * 如果output已指定文件后缀这里可以不再指定
+     * @param string $format 如: tar zip tar.gz
+     * @return $this
+     */
+    public function format(string $format): Git
+    {
+        $this->format = $format;
+        return $this;
+    }
+
+    /**
+     * 指定最新的一次git提交的hash或HEAD(将包含)
+     * @param $commit_id
+     * @return $this
+     */
+    public function newCommit($commit_id): Git
+    {
+        $this->new_commit = $commit_id;
+        return $this;
+    }
+
+    /**
+     * 指定最之前一次git提交的hash或HEAD(将不包含)
+     * @param $commit_id
+     * @return $this
+     */
+    public function oldCommit($commit_id): Git
+    {
+        $this->old_commit = $commit_id;
+        return $this;
+    }
+
+    /**
+     * 全量打包时的分支名称
+     * @param $branch_name
+     * @return $this
+     */
+    public function branch($branch_name): Git
+    {
+        $this->branch = $branch_name;
+        return $this;
+    }
+
+    public function prepare(): Git
+    {
+        $this->cmd .= 'git archive ';
+        if ($this->branch) $this->cmd .= "$this->branch ";
+        if ($this->output) $this->cmd .= "-o $this->dist$this->output ";
+        if ($this->format) $this->cmd .= "--format=$this->format ";
+        if (!empty($this->add_file)) {
+            foreach ($this->add_file as $item) {
+                $this->cmd .= "--add-file=$item ";
+            }
+        }
+        if ($this->new_commit) $this->cmd .= "$this->new_commit ";
+
+        $diff = '$(git diff --name-only %s %s)';
+
+        if (($this->new_commit === 'HEAD' && !$this->old_commit) || ($this->new_commit === 'HEAD' && $this->old_commit === 'HEAD')) {
+            $diff = sprintf($diff, 'HEAD', '');
+        } elseif (($this->new_commit === 'HEAD' && $this->old_commit === 'HEAD^')) {
+            $diff = sprintf($diff, 'HEAD^', '');
+        } else {
+            $diff = sprintf($diff, $this->old_commit, $this->new_commit);
+        }
+        if ($this->new_commit) $this->cmd .= $diff;
+
+        $this->cmd = trim($this->cmd);
+        return $this;
+    }
+
+    public function run(): string
+    {
+        if (!$this->cmd) $this->prepare();
+        if (PHP_OS === 'WINNT') {
+            logE('cmd not support, Please execute manually');
+            logP($this->cmd);
+            return '';
+        }
+        if (is_file($this->getOutPutFile())) unlink($this->getOutPutFile());
+        return $this->execGit($this->cmd);
+    }
 
     public function hashShort(): string
     {
@@ -141,24 +259,11 @@ class Git
     {
         return trim(shell_exec("$cmd 2>&1"));
     }
-
-    public function pack($file_name, $add_file = null, $branch_name = null)
-    {
-        if ($branch_name === null) $branch_name = $this->branchName();
-        $file_name = "./dist/$file_name";
-        if (is_file($file_name)) unlink($file_name);
-        if ($add_file !== null) {
-            $add_file = '--add-file=' . $add_file;
-        } else {
-            $add_file = '';
-        }
-        logI("Packing File: $file_name");
-        return exec(sprintf($this->cmd_pack, $branch_name, $add_file, $file_name)) === false ? false : $file_name;
-    }
 }
 
 $git = new Git;
 $object_name = strtoupper($git->objectName());
+$add_other_file = false;
 
 // 打包方式 1:全量打包(默认) 2:最近一次提交和当前未提交的文件 3:某两次提交的差异文件 4:当前已修改但未提交的文件
 logI('Please select packaging method:');
@@ -169,32 +274,24 @@ logI('      [4]: Packaging Current Not commit files');
 logI('Your choice (default [1]):', false);
 choice:
 $choice = trim(fgets(STDIN));
+$time = date('md');
+$last_hash = strtoupper($git->hashShort());
 switch ($choice) {
     case 2:
-        $last_hash = strtoupper($git->hashShort());
-        $time = date('md');
-        $file = "./dist/{$object_name}_LAST_UPDATE_{$time}_$last_hash.tar.gz";
-        $cmd = "git archive -o $file HEAD $(git diff --name-only HEAD^)";
-        if (PHP_OS === 'WINNT') {
-            logE('cmd not support, Please execute manually');
-            logP($cmd);
-            exit(0);
+        $file = "{$object_name}_LAST_UPDATE_{$time}_$last_hash.tar.gz";
+        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD^')->run();
+        if ($rs) {
+            logI($rs);
+            logP('Generated File: ' . $file);
         }
-        logI($git->execGit($cmd));
-        logP('Generated File: ' . $file);
         exit(0);
     case 4:
-        $last_hash = strtoupper($git->hashShort());
-        $time = date('md');
-        $file = "./dist/{$object_name}_LAST_COMMIT_{$time}_$last_hash.tar.gz";
-        $cmd = "git archive -o $file HEAD $(git diff --name-only HEAD)";
-        if (PHP_OS === 'WINNT') {
-            logE('cmd not support, Please execute manually');
-            logP($cmd);
-            exit(0);
+        $file = "{$object_name}_LAST_COMMIT_{$time}_$last_hash.tar.gz";
+        $rs = $git->output($file)->newCommit('HEAD')->run();
+        if ($rs) {
+            logI($rs);
+            logP('Generated File: ' . $file);
         }
-        logI($git->execGit($cmd));
-        logP('Generated File: ' . $file);
         exit(0);
     case 3:
         logI('Please enter new commit id:', false);
@@ -203,16 +300,12 @@ switch ($choice) {
         logI('Please enter old commit id:', false);
         $old = trim(fgets(STDIN));
         $_old = strtoupper($old);
-        $time = date('md');
-        $file = "./dist/{$object_name}_UPDATE_{$time}_{$_new}_$_old.tar.gz";
-        $cmd = "git archive -o $file $new $(git diff --name-only $old $new)";
-        if (PHP_OS === 'WINNT') {
-            logE('cmd not support, Please execute manually');
-            logP($cmd);
-            exit(0);
+        $file = "{$object_name}_UPDATE_{$time}_{$_new}_$_old.tar.gz";
+        $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
+        if ($rs) {
+            logI($rs);
+            logP('Generated File: ' . $file);
         }
-        logI($git->execGit($cmd));
-        logP('Generated File: ' . $file);
         exit(0);
     case 1:
     case '':
@@ -250,7 +343,9 @@ $answer = trim(fgets(STDIN));
 logI("Begin packing...");
 
 if ($answer == 'y') {
-    $pack_file = $git->pack("$object_name.{$version['version']}.tar", $version_file);
+    $rs = $git->output("$object_name.{$version['version']}.tar")->addFile($version_file)->run();
+    logI($rs);
+    $pack_file = $git->getOutPutFile();
     $zippy = Zippy::load();
     logI("Begin packing vendor...");
     $archive = $zippy->open($pack_file);
@@ -260,10 +355,11 @@ if ($answer == 'y') {
     unlink($pack_file);
     logI('Packing vendor finished');
 } else {
-    $pack_file = $new_pack_file = $git->pack("$object_name.{$version['version']}.tar.gz", $version_file);
+    $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar.gz")->addFile($version_file)->run();
+    logI($rs);
+    $new_pack_file = $git->getOutPutFile();
 }
 
-if ($pack_file === false) logE("pack failed!");
 logI("Packing finished");
 
 logP('Generated File: ' . $new_pack_file);
