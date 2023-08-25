@@ -1,0 +1,16 @@
+{
+    "name": "luguohuakai/packme",
+    "description": "packing code to tar.gz",
+    "type": "library",
+    "require": {
+        "php": ">=7.4",
+        "alchemy/zippy": "^1.0"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "DM",
+            "email": "769245396@qq.com"
+        }
+    ]
+}

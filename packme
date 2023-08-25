@@ -1,0 +1,269 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * php vendor/packme
+ * 快速打包项目代码 <br>
+ * 运行于项目根目录 <br>
+ * 首次运行会在当前目录下生成 dist/version.ini <br>
+ * 主要是利用了git archive(归档)功能 <br>
+ * 环境依赖: php>=7.4/git命令行/zippy <br>
+ * @author DM <769245396@qq.com>
+ */
+
+use Alchemy\Zippy\Zippy;
+
+require __DIR__ . '/vendor/autoload.php';
+
+/**
+ * log info
+ * @param string $msg
+ * @param bool $wrap 是否换行
+ * @return void
+ */
+function logI(string $msg = '', bool $wrap = true)
+{
+    if ($wrap) $msg .= PHP_EOL;
+    echo $msg;
+}
+
+/**
+ * log primary
+ * @param string $msg
+ * @param bool $wrap 是否换行
+ * @return void
+ */
+function logP(string $msg = '', bool $wrap = true)
+{
+    $msg = "\033[34m $msg \033[0m";
+    if ($wrap) $msg .= PHP_EOL;
+    echo $msg;
+}
+
+/**
+ * log error
+ * @param string $msg
+ * @param bool $wrap 是否换行
+ * @return void
+ */
+function logE(string $msg = '', bool $wrap = true)
+{
+    $msg = "\033[33m $msg \033[0m";
+    if ($wrap) $msg .= PHP_EOL;
+    echo $msg;
+}
+
+logI('PACKME V1.0.0');
+logI();
+
+$dist_dir = './dist';
+if (!is_dir($dist_dir)) mkdir($dist_dir);
+$version_file = './dist/version.ini';
+if (!is_file($version_file)) file_put_contents($version_file, '');
+
+class Ini
+{
+    private string $file;
+    public array $all;
+
+    public function __construct($file)
+    {
+        if (!is_file($file)) file_put_contents($file, '');
+        $this->file = $file;
+        $this->all = parse_ini_file($file);
+    }
+
+    public function get($key, $default = null)
+    {
+        if (!is_file($this->file)) return $default;
+        return $this->all[$key] ?? $default;
+    }
+
+    public function getAll()
+    {
+        return $this->all;
+    }
+
+    public function set($key, $value): bool
+    {
+        $data = array_merge($this->all, [$key => $value]);
+        return !(file_put_contents($this->file, $this->arrayToIni($data)) === false);
+    }
+
+    public function setAll($data): bool
+    {
+        $data = array_merge($this->all, $data);
+        return !(file_put_contents($this->file, $this->arrayToIni($data)) === false);
+    }
+
+    private function arrayToIni($data): string
+    {
+        if (empty($data)) return '';
+        $str = '';
+        foreach ($data as $key => $datum) {
+            $str .= "$key=$datum\r\n";
+        }
+        return $str;
+    }
+}
+
+class Git
+{
+    private string $cmd_hash_short = 'git rev-list HEAD --abbrev-commit --max-count=1';
+    private string $cmd_hash_long = 'git rev-parse HEAD';
+    private string $cmd_branch_name = 'git symbolic-ref --short -q HEAD';
+    private string $cmd_pack = 'git archive %s %s --output=%s';
+    private string $cmd_name = 'git rev-parse --show-toplevel';
+
+    public function hashShort(): string
+    {
+        return $this->execGit($this->cmd_hash_short);
+    }
+
+    public function hashLong(): string
+    {
+        return $this->execGit($this->cmd_hash_long);
+    }
+
+    public function branchName(): string
+    {
+        return $this->execGit($this->cmd_branch_name);
+    }
+
+    public function objectName()
+    {
+        $rs = $this->execGit($this->cmd_name);
+        $arr = explode('/', $rs);
+        return $arr[count($arr) - 1];
+    }
+
+    public function execGit($cmd): string
+    {
+        return trim(shell_exec("$cmd 2>&1"));
+    }
+
+    public function pack($file_name, $add_file = null, $branch_name = null)
+    {
+        if ($branch_name === null) $branch_name = $this->branchName();
+        $file_name = "./dist/$file_name";
+        if (is_file($file_name)) unlink($file_name);
+        if ($add_file !== null) {
+            $add_file = '--add-file=' . $add_file;
+        } else {
+            $add_file = '';
+        }
+        logI("Packing File: $file_name");
+        return exec(sprintf($this->cmd_pack, $branch_name, $add_file, $file_name)) === false ? false : $file_name;
+    }
+}
+
+$git = new Git;
+$object_name = strtoupper($git->objectName());
+
+// 打包方式 1:全量打包(默认) 2:最近一次提交和当前未提交的文件 3:某两次提交的差异文件 4:当前已修改但未提交的文件
+logI('Please select packaging method:');
+logI('      [1]: Full packaging');
+logI('      [2]: Packaging Last commit and current Not commit files');
+logI('      [3]: Packaging Two commits different files');
+logI('      [4]: Packaging Current Not commit files');
+logI('Your choice (default [1]):', false);
+choice:
+$choice = trim(fgets(STDIN));
+switch ($choice) {
+    case 2:
+        $last_hash = strtoupper($git->hashShort());
+        $time = date('md');
+        $file = "./dist/{$object_name}_LAST_UPDATE_{$time}_$last_hash.tar.gz";
+        $cmd = "git archive -o $file HEAD $(git diff --name-only HEAD^)";
+        if (PHP_OS === 'WINNT') {
+            logE('cmd not support, Please execute manually');
+            logP($cmd);
+            exit(0);
+        }
+        logI($git->execGit($cmd));
+        logP('Generated File: ' . $file);
+        exit(0);
+    case 4:
+        $last_hash = strtoupper($git->hashShort());
+        $time = date('md');
+        $file = "./dist/{$object_name}_LAST_COMMIT_{$time}_$last_hash.tar.gz";
+        $cmd = "git archive -o $file HEAD $(git diff --name-only HEAD)";
+        if (PHP_OS === 'WINNT') {
+            logE('cmd not support, Please execute manually');
+            logP($cmd);
+            exit(0);
+        }
+        logI($git->execGit($cmd));
+        logP('Generated File: ' . $file);
+        exit(0);
+    case 3:
+        logI('Please enter new commit id:', false);
+        $new = trim(fgets(STDIN));
+        $_new = strtoupper($new);
+        logI('Please enter old commit id:', false);
+        $old = trim(fgets(STDIN));
+        $_old = strtoupper($old);
+        $time = date('md');
+        $file = "./dist/{$object_name}_UPDATE_{$time}_{$_new}_$_old.tar.gz";
+        $cmd = "git archive -o $file $new $(git diff --name-only $old $new)";
+        if (PHP_OS === 'WINNT') {
+            logE('cmd not support, Please execute manually');
+            logP($cmd);
+            exit(0);
+        }
+        logI($git->execGit($cmd));
+        logP('Generated File: ' . $file);
+        exit(0);
+    case 1:
+    case '':
+        break;
+    default:
+        logE('Your input is incorrect, please re-enter');
+        goto choice;
+}
+
+$ini = new Ini(dirname(__FILE__) . '/dist/version.ini');
+
+$vv = $ini->get('version') ? function () use ($ini) {
+    $arr = explode('.', $ini->get('version'));
+    return "$arr[0].$arr[1].";
+} : 'V1.0.';
+// 注意: 如需更改大版本 如: V1.0 -> V2.1 需手动更改./dist/version.ini中version字段大版本
+$version = [
+    'author' => 'DM',
+    'version' => $vv . date('md') . '.' . strtoupper($git->hashShort()),
+    'git_branch_name' => $git->branchName(),
+    'git_version_hash_short' => $git->hashShort(),
+    'git_version_hash_long' => $git->hashLong(),
+    'update_time' => date('Y-m-d H:i:s'),
+];
+
+logI('Generate version...');
+logI("Branch: {$version['git_branch_name']}");
+logI("Version: {$version['version']}\r\n");
+
+$ini->setAll($version);
+
+logP('Packing vendor? (It will take a long time for y) (y/n) (default:n): ', false);
+$answer = trim(fgets(STDIN));
+
+logI("Begin packing...");
+
+if ($answer == 'y') {
+    $pack_file = $git->pack("$object_name.{$version['version']}.tar", $version_file);
+    $zippy = Zippy::load();
+    logI("Begin packing vendor...");
+    $archive = $zippy->open($pack_file);
+    $archive->addMembers('vendor');
+    $new_pack_file = $pack_file . '.gz';
+    $zippy->create($new_pack_file, $pack_file);
+    unlink($pack_file);
+    logI('Packing vendor finished');
+} else {
+    $pack_file = $new_pack_file = $git->pack("$object_name.{$version['version']}.tar.gz", $version_file);
+}
+
+if ($pack_file === false) logE("pack failed!");
+logI("Packing finished");
+
+logP('Generated File: ' . $new_pack_file);
