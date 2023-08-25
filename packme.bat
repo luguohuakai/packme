@@ -4,7 +4,7 @@ rem -------------------------------------------------------------
 rem command line packme script for Windows.
 rem -------------------------------------------------------------
 
-@setlocal
+@setlocal enabledelayedexpansion
 
 set YII_PATH=%~dp0
 

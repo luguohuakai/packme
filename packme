@@ -109,10 +109,10 @@ class Git
     private string $cmd_branch_name = 'git symbolic-ref --short -q HEAD';
     private string $cmd_name = 'git rev-parse --show-toplevel';
 
-    private string $output;
+    private string $output = '';
     private array $add_file = [];
-    private string $format;
-    private string $branch;
+    private string $format = '';
+    private string $branch = '';
 
     private string $new_commit = '';
     private string $old_commit = '';
@@ -204,9 +204,17 @@ class Git
                 $this->cmd .= "--add-file=$item ";
             }
         }
-        if ($this->new_commit) $this->cmd .= "$this->new_commit ";
+        if ($this->new_commit) {
+            $this->cmd .= "$this->new_commit ";
+            $this->prepareDiff();
+        }
+        $this->cmd = trim($this->cmd);
+        return $this;
+    }
 
-        $diff = '$(git diff --name-only %s %s)';
+    private function prepareDiff()
+    {
+        $diff = 'git diff --name-only %s %s';
 
         if (($this->new_commit === 'HEAD' && !$this->old_commit) || ($this->new_commit === 'HEAD' && $this->old_commit === 'HEAD')) {
             $diff = sprintf($diff, 'HEAD', '');
@@ -215,17 +223,22 @@ class Git
         } else {
             $diff = sprintf($diff, $this->old_commit, $this->new_commit);
         }
-        if ($this->new_commit) $this->cmd .= $diff;
+        $diff = trim($diff);
 
-        $this->cmd = trim($this->cmd);
-        return $this;
+        if (PHP_OS === 'WINNT') {
+            // todo: widows下怎么写?
+//            $this->cmd = "set output=\nfor /f \"delims=\" %%a in ('$diff') do ( set output=!output!\"%%a\" )\n$this->cmd %output%";
+            $this->cmd .= "$($diff)";
+        } else {
+            $this->cmd .= "$($diff)";
+        }
     }
 
     public function run(): string
     {
         if (!$this->cmd) $this->prepare();
-        if (PHP_OS === 'WINNT') {
-            logE('cmd not support, Please execute manually');
+        if (PHP_OS === 'WINNT' && !$this->branch) {
+            logE('Windows temporarily does not support, Please execute manually');
             logP($this->cmd);
             return '';
         }
@@ -271,14 +284,14 @@ logI('      [1]: Full packaging');
 logI('      [2]: Packaging Last commit and current Not commit files');
 logI('      [3]: Packaging Two commits different files');
 logI('      [4]: Packaging Current Not commit files');
-logI('Your choice (default [1]):', false);
+logP('Your choice (default [1]):', false);
 choice:
 $choice = trim(fgets(STDIN));
 $time = date('md');
 $last_hash = strtoupper($git->hashShort());
 switch ($choice) {
     case 2:
-        $file = "{$object_name}_LAST_UPDATE_{$time}_$last_hash.tar.gz";
+        $file = "{$object_name}_LAST_COMMIT_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD^')->run();
         if ($rs) {
             logI($rs);
@@ -286,7 +299,7 @@ switch ($choice) {
         }
         exit(0);
     case 4:
-        $file = "{$object_name}_LAST_COMMIT_{$time}_$last_hash.tar.gz";
+        $file = "{$object_name}_LAST_UPDATE_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('HEAD')->run();
         if ($rs) {
             logI($rs);
@@ -317,10 +330,13 @@ switch ($choice) {
 
 $ini = new Ini(dirname(__FILE__) . '/dist/version.ini');
 
-$vv = $ini->get('version') ? function () use ($ini) {
+if ($ini->get('version')) {
     $arr = explode('.', $ini->get('version'));
-    return "$arr[0].$arr[1].";
-} : 'V1.0.';
+    $vv = "$arr[0].$arr[1].";
+} else {
+    $vv = 'V1.0.';
+}
+
 // 注意: 如需更改大版本 如: V1.0 -> V2.1 需手动更改./dist/version.ini中version字段大版本
 $version = [
     'author' => 'DM',
@@ -343,7 +359,7 @@ $answer = trim(fgets(STDIN));
 logI("Begin packing...");
 
 if ($answer == 'y') {
-    $rs = $git->output("$object_name.{$version['version']}.tar")->addFile($version_file)->run();
+    $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar")->addFile($version_file)->run();
     logI($rs);
     $pack_file = $git->getOutPutFile();
     $zippy = Zippy::load();
