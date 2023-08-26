@@ -1,7 +1,173 @@
 #!/usr/bin/env php
 <?php
+
+class Func
+{
+    /**
+     * 命令行打印 一般消息 无颜色
+     * @param string $msg
+     * @param bool $wrap 是否换行
+     * @return void
+     */
+    public static function logInfo(string $msg = '', bool $wrap = true)
+    {
+        if ($wrap) $msg .= PHP_EOL;
+        echo $msg;
+    }
+
+    /**
+     * 命令行打印 主消息 蓝色
+     * @param string $msg
+     * @param bool $wrap 是否换行
+     * @return void
+     */
+    public static function logPrimary(string $msg = '', bool $wrap = true)
+    {
+        $msg = "\033[34m $msg \033[0m";
+        if ($wrap) $msg .= PHP_EOL;
+        echo $msg;
+    }
+
+    /**
+     * 命令行打印 错误消息 背景红色
+     * @param string $msg
+     * @param bool $wrap 是否换行
+     * @return void
+     */
+    public static function logError(string $msg = '', bool $wrap = true)
+    {
+        $msg = "\033[41m $msg \033[0m";
+        if ($wrap) $msg .= PHP_EOL;
+        echo $msg;
+    }
+
+    /**
+     * 命令行打印 成功消息 绿色
+     * @param string $msg
+     * @param bool $wrap 是否换行
+     * @return void
+     */
+    public static function logSuccess(string $msg = '', bool $wrap = true)
+    {
+        $msg = "\033[32m $msg \033[0m";
+        if ($wrap) $msg .= PHP_EOL;
+        echo $msg;
+    }
+
+    /**
+     * 检查字符串是否以指定字符串结尾
+     * @param string $haystack
+     * @param string $needle suffix
+     * @return bool
+     */
+    public static function hasSuffix(string $haystack, string $needle): bool
+    {
+        $len = mb_strlen($needle);
+        return mb_substr($haystack, -1, $len) === $needle;
+    }
+
+    public static function copyDirectory($src, $dst): bool
+    {
+        // 检查源目录是否存在并且是否是目录
+        if (!is_dir($src)) return false;
+        // 检查目标目录是否存在并且是否是目录
+        if (!is_dir($dst)) mkdir($dst);
+        // 打开源目录
+        $dirHandle = opendir($src);
+        // 循环读取源目录下的文件和目录，复制到目标目录
+        while (false !== ($file = readdir($dirHandle))) {
+            if ($file != "." && $file != "..") {
+                $srcFile = $src . "/" . $file;
+                $dstFile = $dst . "/" . $file;
+
+                if (is_dir($srcFile)) {
+                    self::copyDirectory($srcFile, $dstFile); // 递归复制子目录
+                } else {
+                    copy($srcFile, $dstFile);
+                }
+            }
+        }
+
+        closedir($dirHandle);
+
+        return true;
+    }
+}
+
 // 指定项目根目录
+root:
+Func::logPrimary('请指定项目根目录(默认:/srun3/www/srun4-mgr/): ', false);
+$root = trim(fgets(STDIN));
+$root = $root ?: '/srun3/www/srun4-mgr/';
+if (!is_dir($root)) {
+    Func::logInfo('当前目录:' . __DIR__);
+    Func::logError("目录不存在, 请重新输入! $root");
+    goto root;
+}
+$root = Func::hasSuffix($root, '/') ?: $root .= '/';
+// 忽略文件(完整路径)这些目录或文件将不会被替换
+$ignore = ['./replaceme', './packme', './packme.bat', './test'];
 // 递归查询当前目录结构并形成一个数组
-// 备份(重命名) -> 替换(cp 拷贝)
-// 输出替换日志
-// 忽略文件(完整路径)
+loopDir('.', $ignore, $root);
+
+function loopDir($path, $ignore, $root)
+{
+    foreach (glob($path, GLOB_BRACE) as $file) {
+        if ($file === './vendor') {
+            Func::logInfo('当前目录替换时间可能较长, 请耐心等待....');
+            $target = $root . str_replace('./', '', $file);
+            if (is_dir($target)) {
+                if (rename($target, $target . date('YmdHis'))) {
+                    if (Func::copyDirectory($file, $target)) {
+                        Func::logSuccess("替换成功: $target");
+                    } else {
+                        Func::logError("替换失败: $target");
+                    }
+                } else {
+                    Func::logError("备份失败: $target");
+                }
+            } else {
+                if (Func::copyDirectory($file, $target)) {
+                    Func::logSuccess("创建成功: $target");
+                } else {
+                    Func::logError("创建失败: $target");
+                }
+            }
+            continue;
+        }
+        if (in_array($file, $ignore)) continue;
+        if (is_dir($file)) {
+            loopDir($file . '/*', $ignore, $root);
+        } else {
+            // 备份(重命名) -> 替换(cp 拷贝)
+            $target = $root . str_replace('./', '', $file);
+            if (is_file($target)) {
+                // 备份
+                if (rename($target, $target . date('YmdHis'))) {
+                    if (copy($file, $target)) {
+                        Func::logSuccess("替换成功: $target");
+                    } else {
+                        Func::logError("替换失败: $target");
+                    }
+                } else {
+                    Func::logError("备份失败: $target");
+                }
+            } else {
+                // 创建
+                // : 先创建对应目录
+                $target_dir = substr($target, 0, strrpos($target, '/'));
+                if (!is_dir($target_dir)) {
+                    if (!mkdir($target_dir, 0755, true)) {
+                        Func::logError("创建目录失败:$target_dir");
+                        continue;
+                    }
+                }
+                if (copy($file, $target)) {
+                    Func::logSuccess("创建成功: $target");
+                } else {
+                    Func::logError("创建失败: $target");
+                }
+            }
+        }
+    }
+}

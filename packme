@@ -12,49 +12,12 @@
  */
 
 use Alchemy\Zippy\Zippy;
+use luguohuakai\func\Func;
 
 require './vendor/autoload.php';
 
-/**
- * log info
- * @param string $msg
- * @param bool $wrap 是否换行
- * @return void
- */
-function logI(string $msg = '', bool $wrap = true)
-{
-    if ($wrap) $msg .= PHP_EOL;
-    echo $msg;
-}
-
-/**
- * log primary
- * @param string $msg
- * @param bool $wrap 是否换行
- * @return void
- */
-function logP(string $msg = '', bool $wrap = true)
-{
-    $msg = "\033[34m $msg \033[0m";
-    if ($wrap) $msg .= PHP_EOL;
-    echo $msg;
-}
-
-/**
- * log error
- * @param string $msg
- * @param bool $wrap 是否换行
- * @return void
- */
-function logE(string $msg = '', bool $wrap = true)
-{
-    $msg = "\033[33m $msg \033[0m";
-    if ($wrap) $msg .= PHP_EOL;
-    echo $msg;
-}
-
-logI('PACKME V1.0.0');
-logI();
+Func::logInfo('PACKME V1.0.0');
+Func::logInfo();
 
 $dist_dir = './dist';
 if (!is_dir($dist_dir)) mkdir($dist_dir);
@@ -225,21 +188,23 @@ class Git
         }
         $diff = trim($diff);
 
-        if (PHP_OS === 'WINNT') {
-            // todo: widows下怎么写?
-//            $this->cmd = "set output=\nfor /f \"delims=\" %%a in ('$diff') do ( set output=!output!\"%%a\" )\n$this->cmd %output%";
-            $this->cmd .= "$($diff)";
-        } else {
-            $this->cmd .= "$($diff)";
-        }
+//        if (PHP_OS === 'WINNT') {
+//            // todo: widows下怎么写?
+////            $this->cmd = "set output=\nfor /f \"delims=\" %%a in ('$diff') do ( set output=!output!\"%%a\" )\n$this->cmd %output%";
+//            $this->cmd .= "$($diff)";
+//        } else {
+//            $this->cmd .= "$($diff)";
+//        }
+
+        $this->cmd .= "$($diff)";
     }
 
     public function run(): string
     {
         if (!$this->cmd) $this->prepare();
         if (PHP_OS === 'WINNT' && !$this->branch) {
-            logE('Windows temporarily does not support, Please execute manually');
-            logP($this->cmd);
+            Func::logError('Windows temporarily does not support, Please execute manually');
+            Func::logPrimary($this->cmd);
             return '';
         }
         if (is_file($this->getOutPutFile())) unlink($this->getOutPutFile());
@@ -279,12 +244,12 @@ $object_name = strtoupper($git->objectName());
 $add_other_file = false;
 
 // 打包方式 1:全量打包(默认) 2:最近一次提交和当前未提交的文件 3:某两次提交的差异文件 4:当前已修改但未提交的文件
-logI('Please select packaging method:');
-logI('      [1]: Full packaging');
-logI('      [2]: Packaging Last commit and current Not commit files');
-logI('      [3]: Packaging Two commits different files');
-logI('      [4]: Packaging Current Not commit files');
-logP('Your choice (default [1]):', false);
+Func::logInfo('Please select packaging method:');
+Func::logInfo('      [1]: Full packaging');
+Func::logInfo('      [2]: Packaging Last commit and current Not commit files');
+Func::logInfo('      [3]: Packaging Two commits different files');
+Func::logInfo('      [4]: Packaging Current Not commit files');
+Func::logPrimary('Your choice (default [1]):', false);
 choice:
 $choice = trim(fgets(STDIN));
 $time = date('md');
@@ -294,37 +259,37 @@ switch ($choice) {
         $file = "{$object_name}_LAST_COMMIT_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD^')->run();
         if ($rs) {
-            logI($rs);
-            logP('Generated File: ' . $file);
+            Func::logInfo($rs);
+            Func::logPrimary('Generated File: ' . $file);
         }
         exit(0);
     case 4:
         $file = "{$object_name}_LAST_UPDATE_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('HEAD')->run();
         if ($rs) {
-            logI($rs);
-            logP('Generated File: ' . $file);
+            Func::logInfo($rs);
+            Func::logPrimary('Generated File: ' . $file);
         }
         exit(0);
     case 3:
-        logI('Please enter new commit id:', false);
+        Func::logInfo('Please enter new commit id:', false);
         $new = trim(fgets(STDIN));
         $_new = strtoupper($new);
-        logI('Please enter old commit id:', false);
+        Func::logInfo('Please enter old commit id:', false);
         $old = trim(fgets(STDIN));
         $_old = strtoupper($old);
         $file = "{$object_name}_UPDATE_{$time}_{$_new}_$_old.tar.gz";
         $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
         if ($rs) {
-            logI($rs);
-            logP('Generated File: ' . $file);
+            Func::logInfo($rs);
+            Func::logPrimary('Generated File: ' . $file);
         }
         exit(0);
     case 1:
     case '':
         break;
     default:
-        logE('Your input is incorrect, please re-enter');
+        Func::logError('Your input is incorrect, please re-enter');
         goto choice;
 }
 
@@ -347,35 +312,35 @@ $version = [
     'update_time' => date('Y-m-d H:i:s'),
 ];
 
-logI('Generate version...');
-logI("Branch: {$version['git_branch_name']}");
-logI("Version: {$version['version']}\r\n");
+Func::logInfo('Generate version...');
+Func::logInfo("Branch: {$version['git_branch_name']}");
+Func::logInfo("Version: {$version['version']}\r\n");
 
 $ini->setAll($version);
 
-logP('Packing vendor? (It will take a long time for y) (y/n) (default:n): ', false);
+Func::logPrimary('Packing vendor? (It will take a long time for y) (y/n) (default:n): ', false);
 $answer = trim(fgets(STDIN));
 
-logI("Begin packing...");
+Func::logInfo("Begin packing...");
 
 if ($answer == 'y') {
     $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar")->addFile($version_file)->run();
-    logI($rs);
+    Func::logInfo($rs);
     $pack_file = $git->getOutPutFile();
     $zippy = Zippy::load();
-    logI("Begin packing vendor...");
+    Func::logInfo("Begin packing vendor...");
     $archive = $zippy->open($pack_file);
     $archive->addMembers('vendor');
     $new_pack_file = $pack_file . '.gz';
     $zippy->create($new_pack_file, $pack_file);
     unlink($pack_file);
-    logI('Packing vendor finished');
+    Func::logInfo('Packing vendor finished');
 } else {
     $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar.gz")->addFile($version_file)->run();
-    logI($rs);
+    Func::logInfo($rs);
     $new_pack_file = $git->getOutPutFile();
 }
 
-logI("Packing finished");
+Func::logInfo("Packing finished");
 
-logP('Generated File: ' . $new_pack_file);
+Func::logPrimary('Generated File: ' . $new_pack_file);
