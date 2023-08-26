@@ -240,6 +240,8 @@ class Git
 }
 
 $git = new Git;
+$replaceme = './vendor/luguohuakai/packme/replaceme';
+if (is_file($replaceme)) $git->addFile($replaceme);
 $object_name = strtoupper($git->objectName());
 $add_other_file = false;
 
