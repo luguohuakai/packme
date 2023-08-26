@@ -204,8 +204,10 @@ class Git
 //            $this->cmd .= "$($diff)";
 //        }
 
-        file_put_contents($this->change_file, 'Change Files:' . PHP_EOL, FILE_APPEND);
-        $this->execGit("$diff >> $this->change_file");
+        if (is_file($this->change_file)) {
+            file_put_contents($this->change_file, PHP_EOL . 'Change Files:' . PHP_EOL, FILE_APPEND);
+            $this->execGit("$diff >> $this->change_file");
+        }
 
         $this->cmd .= "$($diff)";
     }
