@@ -83,6 +83,14 @@ class Git
     // 默认打包于当前目录下的dist目录内
     private string $dist = './dist/';
 
+    /**
+     * 说明文件应该先就存在于dist<br>
+     * 打包前先往说明文件追加所有变更文件路径<br>
+     * 如果说明文件存在则自动打包说明文件<br>
+     * @var string
+     */
+    private string $change_file = './dist/change.txt';
+
     public string $cmd = '';
 
     /**
@@ -196,11 +204,15 @@ class Git
 //            $this->cmd .= "$($diff)";
 //        }
 
+        file_put_contents($this->change_file, 'Change Files:' . PHP_EOL, FILE_APPEND);
+        $this->execGit("$diff >> $this->change_file");
+
         $this->cmd .= "$($diff)";
     }
 
     public function run(): string
     {
+        if (file_exists($this->change_file)) $this->addFile($this->change_file);
         if (!$this->cmd) $this->prepare();
         if (PHP_OS === 'WINNT' && !$this->branch) {
             Func::logError('Windows temporarily does not support, Please execute manually');
@@ -242,6 +254,7 @@ class Git
 $git = new Git;
 $replaceme = './vendor/luguohuakai/packme/replaceme';
 if (is_file($replaceme)) $git->addFile($replaceme);
+
 $object_name = strtoupper($git->objectName());
 $add_other_file = false;
 
