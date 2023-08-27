@@ -66,7 +66,7 @@ class Func
         return mb_substr($haystack, -1, $len) === $needle;
     }
 
-    public static function copyDirectory($src, $dst): bool
+    public static function copyDir($src, $dst): bool
     {
         // 检查源目录是否存在并且是否是目录
         if (!is_dir($src)) return false;
@@ -81,7 +81,7 @@ class Func
                 $dstFile = $dst . "/" . $file;
 
                 if (is_dir($srcFile)) {
-                    self::copyDirectory($srcFile, $dstFile); // 递归复制子目录
+                    self::copyDir($srcFile, $dstFile); // 递归复制子目录
                 } else {
                     copy($srcFile, $dstFile);
                 }
@@ -108,17 +108,19 @@ $root = Func::hasSuffix($root, '/') ?: $root .= '/';
 // 忽略文件(完整路径)这些目录或文件将不会被替换
 $ignore = ['./replaceme', './packme', './packme.bat', './test'];
 // 递归查询当前目录结构并形成一个数组
-loopDir('.', $ignore, $root);
+$backup = date('YmdHis');
+loopDir('.', $ignore, $root, $backup);
 
-function loopDir($path, $ignore, $root)
+function loopDir($path, $ignore, $root, $backup)
 {
     foreach (glob($path, GLOB_BRACE) as $file) {
         if ($file === './vendor') {
             Func::logInfo('当前目录替换时间可能较长, 请耐心等待....');
             $target = $root . str_replace('./', '', $file);
             if (is_dir($target)) {
-                if (rename($target, $target . date('YmdHis'))) {
-                    if (Func::copyDirectory($file, $target)) {
+                if (rename($target, $target . $backup)) {
+                    Func::logSuccess("备份成功: $target -> $target$backup");
+                    if (Func::copyDir($file, $target)) {
                         Func::logSuccess("替换成功: $target");
                     } else {
                         Func::logError("替换失败: $target");
@@ -127,7 +129,7 @@ function loopDir($path, $ignore, $root)
                     Func::logError("备份失败: $target");
                 }
             } else {
-                if (Func::copyDirectory($file, $target)) {
+                if (Func::copyDir($file, $target)) {
                     Func::logSuccess("创建成功: $target");
                 } else {
                     Func::logError("创建失败: $target");
@@ -137,13 +139,14 @@ function loopDir($path, $ignore, $root)
         }
         if (in_array($file, $ignore)) continue;
         if (is_dir($file)) {
-            loopDir($file . '/*', $ignore, $root);
+            loopDir($file . '/*', $ignore, $root, $backup);
         } else {
             // 备份(重命名) -> 替换(cp 拷贝)
             $target = $root . str_replace('./', '', $file);
             if (is_file($target)) {
                 // 备份
-                if (rename($target, $target . date('YmdHis'))) {
+                if (rename($target, $target . $backup)) {
+                    Func::logSuccess("备份成功: $target -> $target$backup");
                     if (copy($file, $target)) {
                         Func::logSuccess("替换成功: $target");
                     } else {
