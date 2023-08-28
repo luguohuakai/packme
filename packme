@@ -187,10 +187,10 @@ class Git
     {
         $diff = 'git diff --name-only %s %s';
 
-        if (($this->new_commit === 'NOW' && !$this->old_commit)) {
+        if ($this->new_commit === 'NOW' && !$this->old_commit) {
             $diff = sprintf($diff, 'HEAD', '');
-        } elseif (($this->new_commit === 'NOW' && $this->old_commit === 'HEAD^')) {
-            $diff = sprintf($diff, 'HEAD^', '');
+        } elseif ($this->new_commit === 'NOW' && $this->old_commit === 'HEAD~1') {
+            $diff = sprintf($diff, 'HEAD~1', '');
         } else {
             $diff = sprintf($diff, $this->old_commit, $this->new_commit);
         }
@@ -203,21 +203,18 @@ class Git
 //        } else {
 //            $this->cmd .= "$($diff)";
 //        }
-
         $this->cmd .= "$($diff)";
 
+        $log = 'git log %s..%s --pretty=format:"%%s%%nChange Files" --name-only --no-merges';
         if (is_file($this->change_file)) {
-            $diff_new = $diff;
-            file_put_contents($this->change_file, PHP_EOL . 'Change Files:' . PHP_EOL, FILE_APPEND);
-            if (PHP_OS === 'WINNT') {
-                $arr = explode(' ', $diff);
-                foreach ($arr as $k => $v) {
-                    if ($v === 'HEAD^') $arr[$k] = 'HEAD^^';
-                    if ($v === 'HEAD^^') $arr[$k] = 'HEAD^^^^';
-                }
-                $diff_new = implode(' ', $arr);
+            if ($this->new_commit === 'NOW' && !$this->old_commit) {
+                file_put_contents($this->change_file, PHP_EOL . 'Change Files:' . PHP_EOL, FILE_APPEND);
+                shell_exec("$diff 2>&1 >> $this->change_file");
+            } elseif ($this->new_commit === 'NOW' && $this->old_commit === 'HEAD~1') {
+                shell_exec(sprintf($log, 'HEAD~1', 'HEAD') . " 2>&1 >> $this->change_file");
+            } else {
+                shell_exec(sprintf($log, $this->old_commit, $this->new_commit) . " 2>&1 >> $this->change_file");
             }
-            shell_exec("$diff_new 2>&1 >> $this->change_file");
         }
     }
 
@@ -285,7 +282,7 @@ $last_hash = strtoupper($git->hashShort());
 switch ($choice) {
     case 2:
         $file = "{$object_name}_LAST_COMMIT_{$time}_$last_hash.tar.gz";
-        $rs = $git->output($file)->newCommit('NOW')->oldCommit('HEAD^')->run();
+        $rs = $git->output($file)->newCommit('NOW')->oldCommit('HEAD~1')->run();
         if ($rs) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $file);
@@ -293,7 +290,7 @@ switch ($choice) {
         exit(0);
     case 5:
         $file = "{$object_name}_LAST_COMMIT1_{$time}_$last_hash.tar.gz";
-        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD^')->run();
+        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~1')->run();
         if ($rs) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $file);
@@ -301,7 +298,7 @@ switch ($choice) {
         exit(0);
     case 6:
         $file = "{$object_name}_LAST_COMMIT2_{$time}_$last_hash.tar.gz";
-        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD^^')->run();
+        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~2')->run();
         if ($rs) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $file);
