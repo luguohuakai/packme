@@ -204,12 +204,21 @@ class Git
 //            $this->cmd .= "$($diff)";
 //        }
 
-        if (is_file($this->change_file)) {
-            file_put_contents($this->change_file, PHP_EOL . 'Change Files:' . PHP_EOL, FILE_APPEND);
-            shell_exec("$diff 2>&1 >> $this->change_file");
-        }
-
         $this->cmd .= "$($diff)";
+
+        if (is_file($this->change_file)) {
+            $diff_new = $diff;
+            file_put_contents($this->change_file, PHP_EOL . 'Change Files:' . PHP_EOL, FILE_APPEND);
+            if (PHP_OS === 'WINNT') {
+                $arr = explode(' ', $diff);
+                foreach ($arr as $k => $v) {
+                    if ($v === 'HEAD^') $arr[$k] = 'HEAD^^';
+                    if ($v === 'HEAD^^') $arr[$k] = 'HEAD^^^^';
+                }
+                $diff_new = implode(' ', $arr);
+            }
+            shell_exec("$diff_new 2>&1 >> $this->change_file");
+        }
     }
 
     public function run(): string
