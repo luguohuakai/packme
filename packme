@@ -205,11 +205,8 @@ class Git
 //        }
 
         if (is_file($this->change_file)) {
-            $rs = $this->execGit($diff);
-            if ($rs) {
-                file_put_contents($this->change_file, PHP_EOL . 'Change Files:' . PHP_EOL, FILE_APPEND);
-                file_put_contents($this->change_file, $rs, FILE_APPEND);
-            }
+            file_put_contents($this->change_file, PHP_EOL . 'Change Files:' . PHP_EOL, FILE_APPEND);
+            shell_exec("$diff 2>&1 >> $this->change_file");
         }
 
         $this->cmd .= "$($diff)";
