@@ -187,9 +187,9 @@ class Git
     {
         $diff = 'git diff --name-only %s %s';
 
-        if (($this->new_commit === 'HEAD' && !$this->old_commit) || ($this->new_commit === 'HEAD' && $this->old_commit === 'HEAD')) {
+        if (($this->new_commit === 'NOW' && !$this->old_commit)) {
             $diff = sprintf($diff, 'HEAD', '');
-        } elseif (($this->new_commit === 'HEAD' && $this->old_commit === 'HEAD^')) {
+        } elseif (($this->new_commit === 'NOW' && $this->old_commit === 'HEAD^')) {
             $diff = sprintf($diff, 'HEAD^', '');
         } else {
             $diff = sprintf($diff, $this->old_commit, $this->new_commit);
@@ -263,9 +263,11 @@ $add_other_file = false;
 // 打包方式 1:全量打包(默认) 2:最近一次提交和当前未提交的文件 3:某两次提交的差异文件 4:当前已修改但未提交的文件
 Func::logInfo('Please select packaging method:');
 Func::logInfo('      [1]: Full packaging');
-Func::logInfo('      [2]: Packaging Last commit and current Not commit files');
-Func::logInfo('      [3]: Packaging Two commits different files');
-Func::logInfo('      [4]: Packaging Current Not commit files');
+Func::logInfo('      [2]: Package Last commit and current Not commit files');
+Func::logInfo('      [3]: Package Two commits different files');
+Func::logInfo('      [4]: Package Current Not commit files');
+Func::logInfo('      [5]: Package Last commit files');
+Func::logInfo('      [6]: Package the last two commit files');
 Func::logPrimary('Your choice (default [1]):', false);
 choice:
 $choice = trim(fgets(STDIN));
@@ -274,7 +276,23 @@ $last_hash = strtoupper($git->hashShort());
 switch ($choice) {
     case 2:
         $file = "{$object_name}_LAST_COMMIT_{$time}_$last_hash.tar.gz";
+        $rs = $git->output($file)->newCommit('NOW')->oldCommit('HEAD^')->run();
+        if ($rs) {
+            Func::logInfo($rs);
+            Func::logPrimary('Generated File: ' . $file);
+        }
+        exit(0);
+    case 5:
+        $file = "{$object_name}_LAST_COMMIT1_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD^')->run();
+        if ($rs) {
+            Func::logInfo($rs);
+            Func::logPrimary('Generated File: ' . $file);
+        }
+        exit(0);
+    case 6:
+        $file = "{$object_name}_LAST_COMMIT2_{$time}_$last_hash.tar.gz";
+        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD^^')->run();
         if ($rs) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $file);
@@ -282,7 +300,7 @@ switch ($choice) {
         exit(0);
     case 4:
         $file = "{$object_name}_LAST_UPDATE_{$time}_$last_hash.tar.gz";
-        $rs = $git->output($file)->newCommit('HEAD')->run();
+        $rs = $git->output($file)->newCommit('NOW')->run();
         if ($rs) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $file);
