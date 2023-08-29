@@ -216,12 +216,11 @@ class Git
         if (file_exists($this->change_file)) $this->addFile($this->change_file);
         if (!$this->cmd) $this->prepare();
         if (PHP_OS === 'WINNT' && !$this->branch) {
-
             $ps = $this->execGit('where powershell');
             if ($ps) {
                 $this->cmd = "$ps $this->cmd";
             } else {
-                Func::logError('cmd temporarily does not support, Please execute manually, or install powershell');
+                Func::logError('Cmd temporarily does not support, Please execute manually in powershell');
                 Func::logPrimary($this->cmd);
                 return '';
             }
