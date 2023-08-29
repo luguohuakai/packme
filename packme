@@ -196,13 +196,6 @@ class Git
         }
         $diff = trim($diff);
 
-//        if (PHP_OS === 'WINNT') {
-//            // todo: widows下怎么写?
-////            $this->cmd = "set output=\nfor /f \"delims=\" %%a in ('$diff') do ( set output=!output!\"%%a\" )\n$this->cmd %output%";
-//            $this->cmd .= "$($diff)";
-//        } else {
-//            $this->cmd .= "$($diff)";
-//        }
         $this->cmd .= "$($diff)";
 
         $log = 'git log %s..%s --pretty=format:"%%s%%nChange Files" --name-only --no-merges';
@@ -218,14 +211,20 @@ class Git
         }
     }
 
-    public function run(): string
+    public function run(): ?string
     {
         if (file_exists($this->change_file)) $this->addFile($this->change_file);
         if (!$this->cmd) $this->prepare();
         if (PHP_OS === 'WINNT' && !$this->branch) {
-            Func::logError('Windows temporarily does not support, Please execute manually');
-            Func::logPrimary($this->cmd);
-            return '';
+
+            $ps = $this->execGit('where powershell');
+            if ($ps) {
+                $this->cmd = "$ps $this->cmd";
+            } else {
+                Func::logError('cmd temporarily does not support, Please execute manually, or install powershell');
+                Func::logPrimary($this->cmd);
+                return '';
+            }
         }
         if (is_file($this->getOutPutFile())) unlink($this->getOutPutFile());
         return $this->execGit($this->cmd);
@@ -246,16 +245,25 @@ class Git
         return $this->execGit($this->cmd_branch_name);
     }
 
-    public function objectName()
+    public function objectName(): string
     {
         $rs = $this->execGit($this->cmd_name);
         $arr = explode('/', $rs);
         return $arr[count($arr) - 1];
     }
 
-    public function execGit($cmd): string
+    /**
+     * @param $cmd
+     * @return string|null
+     */
+    public function execGit($cmd): ?string
     {
-        return trim(shell_exec("$cmd 2>&1"));
+        $rs = shell_exec("$cmd 2>&1");
+        if ($rs === null) {
+            return null;
+        } else {
+            return trim($rs);
+        }
     }
 }
 
@@ -283,7 +291,7 @@ switch ($choice) {
     case 2:
         $file = "{$object_name}_LAST_COMMIT_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('NOW')->oldCommit('HEAD~1')->run();
-        if ($rs) {
+        if ($rs !== null) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $file);
         }
@@ -291,7 +299,7 @@ switch ($choice) {
     case 5:
         $file = "{$object_name}_LAST_COMMIT1_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~1')->run();
-        if ($rs) {
+        if ($rs !== null) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $file);
         }
@@ -299,7 +307,7 @@ switch ($choice) {
     case 6:
         $file = "{$object_name}_LAST_COMMIT2_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~2')->run();
-        if ($rs) {
+        if ($rs !== null) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $file);
         }
@@ -307,7 +315,7 @@ switch ($choice) {
     case 4:
         $file = "{$object_name}_LAST_UPDATE_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('NOW')->run();
-        if ($rs) {
+        if ($rs !== null) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $file);
         }
@@ -321,7 +329,7 @@ switch ($choice) {
         $_old = strtoupper($old);
         $file = "{$object_name}_UPDATE_{$time}_{$_new}_$_old.tar.gz";
         $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
-        if ($rs) {
+        if ($rs !== null) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $file);
         }
@@ -366,7 +374,11 @@ Func::logInfo("Begin packing...");
 
 if ($answer == 'y') {
     $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar")->addFile($version_file)->run();
-    Func::logInfo($rs);
+    if ($rs !== null) {
+        Func::logInfo($rs);
+    } else {
+        Func::logError('command exec failed: ' . $git->cmd);
+    }
     $pack_file = $git->getOutPutFile();
     $zippy = Zippy::load();
     Func::logInfo("Begin packing vendor...");
@@ -378,7 +390,12 @@ if ($answer == 'y') {
     Func::logInfo('Packing vendor finished');
 } else {
     $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar.gz")->addFile($version_file)->run();
-    Func::logInfo($rs);
+    if ($rs !== null) {
+        Func::logInfo($rs);
+    } else {
+        Func::logError('command exec failed: ' . $git->cmd);
+        exit(1);
+    }
     $new_pack_file = $git->getOutPutFile();
 }
 
