@@ -1,5 +1,13 @@
 #!/usr/bin/env php
 <?php
+// 常用配置
+// 忽略文件(完整路径)这些目录或文件将不会被替换
+$ignore = ['./replaceme', './packme', './packme.bat', './test'];
+// 备份文件后缀规则
+$backup = date('YmdHis');
+// 默认项目根目录
+$default_root = '/srun3/www/srun4-mgr/';
+
 
 class Func
 {
@@ -96,19 +104,17 @@ class Func
 
 // 指定项目根目录
 root:
-Func::logPrimary('请指定项目根目录(默认:/srun3/www/srun4-mgr/): ', false);
+Func::logPrimary("请指定项目根目录(默认:$default_root): ", false);
 $root = trim(fgets(STDIN));
-$root = $root ?: '/srun3/www/srun4-mgr/';
+$root = $root ?: $default_root;
 if (!is_dir($root)) {
-    Func::logInfo('当前目录:' . __DIR__);
-    Func::logError("目录不存在, 请重新输入! $root");
+    Func::logInfo('你所在目录:' . __DIR__);
+    Func::logError($root);
+    Func::logError("此目录不存在, 请重新输入!");
     goto root;
 }
-$root = Func::hasSuffix($root, '/') ?: $root .= '/';
-// 忽略文件(完整路径)这些目录或文件将不会被替换
-$ignore = ['./replaceme', './packme', './packme.bat', './test'];
-// 递归查询当前目录结构并形成一个数组
-$backup = date('YmdHis');
+$root = Func::hasSuffix($root, '/') ? $root : $root .= '/';
+
 loopDir('.', $ignore, $root, $backup);
 
 function loopDir($path, $ignore, $root, $backup)
