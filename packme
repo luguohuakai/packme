@@ -2,7 +2,7 @@
 <?php
 
 /**
- * php vendor/packme
+ * php vendor/luguohuakai/packme/packme
  * 快速打包项目代码 <br>
  * 运行于项目根目录 <br>
  * 首次运行会在当前目录下生成 dist/version.ini <br>
@@ -16,7 +16,7 @@ use luguohuakai\func\Func;
 
 require './vendor/autoload.php';
 
-Func::logInfo('PACKME V1.0.0');
+Func::logInfo('PACKME V1.0');
 Func::logInfo();
 
 $dist_dir = './dist';
