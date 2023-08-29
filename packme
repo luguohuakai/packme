@@ -258,12 +258,18 @@ class Git
      */
     public function execGit($cmd): ?string
     {
-        $rs = shell_exec("$cmd 2>&1");
-        if ($rs === null) {
-            return null;
-        } else {
-            return trim($rs);
+//        $rs = shell_exec("$cmd 2>&1");
+        $last_line = exec($cmd, $output, $code);
+        if ($code === 0) {
+            if (count($output) === 1) return $last_line;
+            if (count($output) === 0) return '';
+            $str = '';
+            foreach ($output as $item) {
+                $str .= $item . PHP_EOL;
+            }
+            return trim($str);
         }
+        return null;
     }
 }
 
@@ -293,7 +299,7 @@ switch ($choice) {
         $rs = $git->output($file)->newCommit('NOW')->oldCommit('HEAD~1')->run();
         if ($rs !== null) {
             Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $file);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         }
         exit(0);
     case 5:
@@ -301,7 +307,7 @@ switch ($choice) {
         $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~1')->run();
         if ($rs !== null) {
             Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $file);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         }
         exit(0);
     case 6:
@@ -309,7 +315,7 @@ switch ($choice) {
         $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~2')->run();
         if ($rs !== null) {
             Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $file);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         }
         exit(0);
     case 4:
@@ -317,7 +323,7 @@ switch ($choice) {
         $rs = $git->output($file)->newCommit('NOW')->run();
         if ($rs !== null) {
             Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $file);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         }
         exit(0);
     case 3:
@@ -331,7 +337,7 @@ switch ($choice) {
         $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
         if ($rs !== null) {
             Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $file);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         }
         exit(0);
     case 1:
