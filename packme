@@ -309,7 +309,7 @@ Func::logInfo('      [6]: Package the last two commit files');
 Func::logPrimary('Your choice (default [1]):', false);
 choice:
 $choice = trim(fgets(STDIN));
-$time = date('md');
+$time = date('mdy');
 $last_hash = strtoupper($git->hashShort());
 switch ($choice) {
     case 2:
@@ -378,7 +378,7 @@ if ($ini->get('version')) {
 // 注意: 如需更改大版本 如: V1.0 -> V2.1 需手动更改./dist/version.ini中version字段大版本
 $version = [
     'author' => 'DM',
-    'version' => $vv . date('md') . '.' . strtoupper($git->hashShort()),
+    'version' => $vv . $time . '.' . strtoupper($git->hashShort()),
     'git_branch_name' => $git->branchName(),
     'git_version_hash_short' => $git->hashShort(),
     'git_version_hash_long' => $git->hashLong(),
