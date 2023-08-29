@@ -222,7 +222,6 @@ class Git
         $separator = '====================';
         if ($contents) {
             $arr = explode($separator, $contents);
-            var_dump($arr);
             if (count($arr) >= 2) {
                 file_put_contents($this->change_file, $arr[0] . $separator . PHP_EOL . PHP_EOL);
             }
