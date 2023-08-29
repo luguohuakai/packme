@@ -200,6 +200,7 @@ class Git
 
         $log = 'git log %s..%s --pretty=format:"%%s%%nChange Files" --name-only --no-merges';
         if (is_file($this->change_file)) {
+            $this->clearChangeFile();
             if ($this->new_commit === 'NOW' && !$this->old_commit) {
                 file_put_contents($this->change_file, PHP_EOL . 'Change Files:' . PHP_EOL, FILE_APPEND);
                 shell_exec("$diff 2>&1 >> $this->change_file");
@@ -208,6 +209,25 @@ class Git
             } else {
                 shell_exec(sprintf($log, $this->old_commit, $this->new_commit) . " 2>&1 >> $this->change_file");
             }
+        }
+    }
+
+    /**
+     * 清理历史记录
+     * @return void
+     */
+    private function clearChangeFile()
+    {
+        $contents = file_get_contents($this->change_file);
+        $separator = '====================';
+        if ($contents) {
+            $arr = explode($separator, $contents);
+            var_dump($arr);
+            if (count($arr) >= 2) {
+                file_put_contents($this->change_file, $arr[0] . $separator . PHP_EOL . PHP_EOL);
+            }
+        } else {
+            file_put_contents($this->change_file, $separator . PHP_EOL . PHP_EOL);
         }
     }
 
