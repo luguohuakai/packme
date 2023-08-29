@@ -260,7 +260,7 @@ class Git
 //        $rs = shell_exec("$cmd 2>&1");
         $last_line = exec($cmd, $output, $code);
         if ($code === 0) {
-            if (count($output) === 1) return $last_line;
+            if (count($output) === 1) return trim($last_line);
             if (count($output) === 0) return '';
             $str = '';
             foreach ($output as $item) {
