@@ -2,7 +2,7 @@
 <?php
 // 常用配置
 // 忽略文件(完整路径)这些目录或文件将不会被替换
-$ignore = ['./replaceme', './packme', './packme.bat', './test'];
+$ignore = ['./replaceme', './replaceme.ini', './packme', './packme.ini', './packme.bat', './test'];
 // 备份文件后缀规则
 $backup = date('YmdHis');
 // 默认项目根目录
