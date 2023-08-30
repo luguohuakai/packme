@@ -183,6 +183,7 @@ class Git
         return $this;
     }
 
+    // TODO: 需要排除已删除的文件, 否则会打包失败: fatal: pathspec 'xxx' did not match any files
     private function prepareDiff()
     {
         $diff = 'git diff --name-only %s %s';
@@ -198,7 +199,7 @@ class Git
 
         $this->cmd .= "$($diff)";
 
-        $log = 'git log %s..%s --pretty=format:"%%s%%nChange Files" --name-only --no-merges';
+        $log = 'git log %s..%s --pretty=format:"%%B%%nChange Files" --name-only --no-merges';
         if (is_file($this->change_file)) {
             $this->clearChangeFile();
             if ($this->new_commit === 'NOW' && !$this->old_commit) {
