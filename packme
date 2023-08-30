@@ -71,6 +71,7 @@ class Git
     private string $cmd_hash_long = 'git rev-parse HEAD';
     private string $cmd_branch_name = 'git symbolic-ref --short -q HEAD';
     private string $cmd_name = 'git rev-parse --show-toplevel';
+    private string $cmd_remote_v = 'git remote -v';
 
     private string $output = '';
     private array $add_file = [];
@@ -266,9 +267,22 @@ class Git
 
     public function objectName(): string
     {
-        $rs = $this->execGit($this->cmd_name);
-        $arr = explode('/', $rs);
-        return $arr[count($arr) - 1];
+        $res = trim($this->execGit($this->cmd_remote_v));
+        if ($res) {
+            $arr1 = explode(PHP_EOL, $res);
+            if (isset($arr1[0]) && Func::hasSuffix(trim($arr1[0]), ')')) {
+                $str = substr(trim($arr1[0]), strrpos(trim($arr1[0]), '/') + 1, strrpos(trim($arr1[0]), '.') - strrpos(trim($arr1[0]), '/') - 1);
+                if ($str) $object_name = $str;
+            }
+        }
+
+        if (!isset($object_name)) {
+            $rs = $this->execGit($this->cmd_name);
+            $arr = explode('/', $rs);
+            $object_name = $arr[count($arr) - 1];
+        }
+
+        return $object_name;
     }
 
     /**
@@ -297,7 +311,67 @@ $replaceme = './vendor/luguohuakai/packme/replaceme';
 if (is_file($replaceme)) $git->addFile($replaceme);
 
 $object_name = strtoupper($git->objectName());
-$add_other_file = false;
+// : 自动判断当前项目根目录并生成replaceme.ini文件
+$replaceme_ini = './replaceme.ini';
+switch ($object_name) {
+    case strtoupper('srun4-selfservice'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-selfservice/');
+        break;
+    case strtoupper('srun4-api'):
+    case strtoupper('srun4-api-74'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-api/');
+        break;
+    case strtoupper('srun4k-managent'):
+    case strtoupper('srun4-mgr'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-mgr/');
+        break;
+    case strtoupper('srun4-system'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-system/');
+        break;
+    case strtoupper('srunDIY'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srunDIY/');
+        break;
+    case strtoupper('srun4-webcron'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-webcron/');
+        break;
+    case strtoupper('srun_loginweb'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun_loginweb/');
+        break;
+    case strtoupper('srun4-idevm'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-idevm/');
+        break;
+    case strtoupper('srun4-idevm-selfservice'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-idevm-selfservice/');
+        break;
+    case strtoupper('srun_devmgrt'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun_devmgrt/');
+        break;
+    case strtoupper('srunlogweb'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srunlogweb/');
+        break;
+    case strtoupper('srunweixin'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srunweixin/');
+        break;
+    case strtoupper('webauthn'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/webauthn/');
+        break;
+    case strtoupper('wifi_portal'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/wifi_portal/');
+        break;
+    case strtoupper('srun_service'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun_service/');
+        break;
+    case strtoupper('srun4k-report'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4k-report/');
+        break;
+    case strtoupper('srun4-bi-server'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-bi-server/');
+        break;
+    case strtoupper('MicroDraw'):
+        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun_mq/');
+        break;
+}
+if (is_file($replaceme_ini)) $git->addFile($replaceme_ini);
 
 // 打包方式 1:全量打包(默认) 2:最近一次提交和当前未提交的文件 3:某两次提交的差异文件 4:当前已修改但未提交的文件
 Func::logInfo('Please select packaging method:');

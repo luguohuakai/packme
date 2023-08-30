@@ -7,6 +7,13 @@ $ignore = ['./replaceme', './packme', './packme.bat', './test'];
 $backup = date('YmdHis');
 // 默认项目根目录
 $default_root = '/srun3/www/srun4-mgr/';
+$replaceme_ini = './replaceme.ini';
+if (is_file($replaceme_ini)) {
+    $replaceme_arr = parse_ini_file($replaceme_ini);
+    if ($replaceme_arr && isset($replaceme_arr['object_root']) && $replaceme_arr['object_root']) {
+        $default_root = $replaceme_arr['object_root'];
+    }
+}
 
 
 class Func
