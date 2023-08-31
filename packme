@@ -34,8 +34,10 @@ class Ini
     public function __construct($file)
     {
         $this->file = $file;
-        $rs = parse_ini_file($file);
-        if ($rs !== false) $this->all = $rs;
+        if (is_file($file)) {
+            $rs = parse_ini_file($file);
+            if ($rs !== false) $this->all = $rs;
+        }
     }
 
     public function get($key, $default = null)
@@ -179,7 +181,11 @@ class Git
             }
         }
         if ($this->new_commit) {
-            $this->cmd .= "$this->new_commit ";
+            if ($this->new_commit === 'NOW') {
+                $this->cmd .= "HEAD ";
+            } else {
+                $this->cmd .= "$this->new_commit ";
+            }
             $this->prepareDiff();
         }
         $this->cmd = trim($this->cmd);
