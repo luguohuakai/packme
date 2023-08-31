@@ -19,6 +19,8 @@ require './vendor/autoload.php';
 Func::logInfo('PACKME V1.0');
 Func::logInfo();
 
+$packme_ini = new Ini('./packme.ini');
+
 $dist_dir = './dist';
 if (!is_dir($dist_dir)) mkdir($dist_dir);
 $version_file = './dist/version.ini';
@@ -27,13 +29,13 @@ if (!is_file($version_file)) file_put_contents($version_file, '');
 class Ini
 {
     private string $file;
-    public array $all;
+    public array $all = [];
 
     public function __construct($file)
     {
-        if (!is_file($file)) file_put_contents($file, '');
         $this->file = $file;
-        $this->all = parse_ini_file($file);
+        $rs = parse_ini_file($file);
+        if ($rs !== false) $this->all = $rs;
     }
 
     public function get($key, $default = null)
@@ -90,7 +92,7 @@ class Git
      * 如果说明文件存在则自动打包说明文件<br>
      * @var string
      */
-    private string $change_file = './dist/change.txt';
+    private string $change_file = './dist/changes.txt';
 
     public string $cmd = '';
 
@@ -200,8 +202,9 @@ class Git
 
         $this->cmd .= "$($diff)";
 
-        $log = 'git log %s..%s --pretty=format:"%%B%%nChange Files" --name-only --no-merges';
-        if (is_file($this->change_file)) {
+        global $packme_ini;
+        if (!($packme_ini->get('generate_change_txt') === '0')) {
+            $log = 'git log %s..%s --pretty=format:"%%B%%nChange Files" --name-only --no-merges';
             $this->clearChangeFile();
             if ($this->new_commit === 'NOW' && !$this->old_commit) {
                 file_put_contents($this->change_file, PHP_EOL . 'Change Files:' . PHP_EOL, FILE_APPEND);
@@ -220,13 +223,28 @@ class Git
      */
     private function clearChangeFile()
     {
+        if (!is_file($this->change_file)) {
+            Func::logInfo('Generate file: ' . $this->change_file);
+            file_put_contents($this->change_file, '');
+        }
         $contents = file_get_contents($this->change_file);
         $separator = '====================';
         if ($contents) {
+            Func::logInfo('Change file exists: ' . $this->change_file);
             $arr = explode($separator, $contents);
             file_put_contents($this->change_file, $arr[0] . $separator . PHP_EOL . PHP_EOL);
         } else {
-            file_put_contents($this->change_file, $separator . PHP_EOL . PHP_EOL);
+            Func::logWarn('Change file contents is empty: ' . $this->change_file);
+            $readme = './vendor/luguohuakai/packme/README.md';
+//            $readme = './README.md';
+            if (is_file($readme)) {
+                $separator2 = '## replaceme';
+                $replaceme_doc = explode($separator2, file_get_contents($readme))[1];
+                file_put_contents($this->change_file, $separator2 . $replaceme_doc . PHP_EOL . PHP_EOL);
+            } else {
+                Func::logWarn('Readme file not exists: ' . $readme);
+            }
+            file_put_contents($this->change_file, $separator . PHP_EOL . PHP_EOL, FILE_APPEND);
         }
     }
 
@@ -310,66 +328,69 @@ if (is_file($replaceme)) $git->addFile($replaceme);
 
 $object_name = strtoupper($git->objectName());
 // : 自动判断当前项目根目录并生成replaceme.ini文件
-$replaceme_ini = './replaceme.ini';
+$replaceme_ini_file = './replaceme.ini';
+if (!is_file($replaceme_ini_file)) file_put_contents($replaceme_ini_file, 'object_root=/srun3/www/srun4-mgr/');
+$replaceme_ini = new Ini($replaceme_ini_file);
+
 switch ($object_name) {
     case strtoupper('srun4-selfservice'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-selfservice/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun4-selfservice/');
         break;
     case strtoupper('srun4-api'):
     case strtoupper('srun4-api-74'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-api/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun4-api/');
         break;
     case strtoupper('srun4k-managent'):
     case strtoupper('srun4-mgr'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-mgr/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun4-mgr/');
         break;
     case strtoupper('srun4-system'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-system/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun4-system/');
         break;
     case strtoupper('srunDIY'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srunDIY/');
+        $replaceme_ini->set('object_root', '/srun3/www/srunDIY/');
         break;
     case strtoupper('srun4-webcron'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-webcron/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun4-webcron/');
         break;
     case strtoupper('srun_loginweb'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun_loginweb/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun_loginweb/');
         break;
     case strtoupper('srun4-idevm'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-idevm/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun4-idevm/');
         break;
     case strtoupper('srun4-idevm-selfservice'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-idevm-selfservice/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun4-idevm-selfservice/');
         break;
     case strtoupper('srun_devmgrt'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun_devmgrt/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun_devmgrt/');
         break;
     case strtoupper('srunlogweb'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srunlogweb/');
+        $replaceme_ini->set('object_root', '/srun3/www/srunlogweb/');
         break;
     case strtoupper('srunweixin'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srunweixin/');
+        $replaceme_ini->set('object_root', '/srun3/www/srunweixin/');
         break;
     case strtoupper('webauthn'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/webauthn/');
+        $replaceme_ini->set('object_root', '/srun3/www/webauthn/');
         break;
     case strtoupper('wifi_portal'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/wifi_portal/');
+        $replaceme_ini->set('object_root', '/srun3/www/wifi_portal/');
         break;
     case strtoupper('srun_service'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun_service/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun_service/');
         break;
     case strtoupper('srun4k-report'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4k-report/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun4k-report/');
         break;
     case strtoupper('srun4-bi-server'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun4-bi-server/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun4-bi-server/');
         break;
     case strtoupper('MicroDraw'):
-        file_put_contents($replaceme_ini, 'object_root=/srun3/www/srun_mq/');
+        $replaceme_ini->set('object_root', '/srun3/www/srun_mq/');
         break;
 }
-if (is_file($replaceme_ini)) $git->addFile($replaceme_ini);
+if (is_file($replaceme_ini_file)) $git->addFile($replaceme_ini_file);
 
 // 打包方式 1:全量打包(默认) 2:最近一次提交和当前未提交的文件 3:某两次提交的差异文件 4:当前已修改但未提交的文件
 Func::logInfo('Please select packaging method:');
@@ -439,7 +460,7 @@ switch ($choice) {
         goto choice;
 }
 
-$ini = new Ini('./dist/version.ini');
+$ini = new Ini($version_file);
 
 if ($ini->get('version')) {
     $arr = explode('.', $ini->get('version'));
