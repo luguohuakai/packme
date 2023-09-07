@@ -16,7 +16,7 @@ use luguohuakai\func\Func;
 
 require './vendor/autoload.php';
 
-Func::logInfo('PACKME V1.0');
+Func::logInfo('PACKME V1.0 POWERED BY LUGUOHUAKAI');
 Func::logInfo();
 
 $packme_ini = new Ini('./packme.ini');
@@ -256,7 +256,7 @@ class Git
 
     public function run(): ?string
     {
-        if (file_exists($this->change_file)) $this->addFile($this->change_file);
+        $this->addFile($this->change_file);
         if (!$this->cmd) $this->prepare();
         if (PHP_OS === 'WINNT' && !$this->branch) {
             $ps = $this->execGit('where powershell');
