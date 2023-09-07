@@ -71,12 +71,12 @@ Please select packaging method:
 ### 部署
 
 * 将安装包直接上传到服务器任意目录
-* 解压缩安装包到`任意新的目录`, 新目录下不能有其它文件
+* 解压缩安装包到`任意空目录`, 空目录下不能有任何其它文件
 * 如: `tar -zxf xxx.tar.gz -C ./test`
 * 进入解压后的目录
 * 如: `cd test`
-* 执行: `php replaceme`
-* 如需记录更新日志则这样执行: `php replaceme | tee zzz_exec.log`
+* 执行: `php ./replaceme`
+* 如需记录更新日志则这样执行: `php ./replaceme | tee zzz_exec.log`
 
 ```shell
 # 执行过程解释
@@ -89,4 +89,9 @@ php ./replaceme
 
 ### 支持回滚操作
 
-* 回滚命令: `php .\replaceme --rollback`
+* 回滚命令: `php ./replaceme --rollback`
+
+### 支持自定义备份后缀
+
+* 自定义备份后缀: `php ./replaceme --backup=xxx`
+

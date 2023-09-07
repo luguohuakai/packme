@@ -31,6 +31,11 @@ if ($argc === 2 && $argv[1] === '--rollback') {
     exit(0);
 }
 
+// 支持自定义后缀
+if ($argc === 2 && Func::hasPrefix($argv[1], '--backup=')) {
+    $backup .= explode('=', $argv[1])[1];
+}
+
 // 非回滚操作则配置备份后缀
 $replaceme_ini->set('backup_suffix', $backup);
 
@@ -305,6 +310,18 @@ class Func
     {
         $len = mb_strlen($needle);
         return mb_substr($haystack, -1, $len) === $needle;
+    }
+
+    /**
+     * 检查字符串是否以指定字符串开头
+     * @param string $haystack
+     * @param string $needle prefix
+     * @return bool
+     */
+    public static function hasPrefix(string $haystack, string $needle): bool
+    {
+        $len = mb_strlen($needle);
+        return mb_substr($haystack, 0, $len) === $needle;
     }
 
     public static function copyDir($src, $dst): bool
