@@ -7,14 +7,227 @@ $ignore = ['./replaceme', './replaceme.ini', './packme', './packme.ini', './pack
 $backup = date('YmdHis');
 // 默认项目根目录
 $default_root = '/srun3/www/srun4-mgr/';
-$replaceme_ini = './replaceme.ini';
-if (is_file($replaceme_ini)) {
-    $replaceme_arr = parse_ini_file($replaceme_ini);
-    if ($replaceme_arr && isset($replaceme_arr['object_root']) && $replaceme_arr['object_root']) {
-        $default_root = $replaceme_arr['object_root'];
+
+// 尝试从配置文件获取项目根目录
+$replaceme_ini = new Config('./replaceme.ini');
+if ($replaceme_ini->get('object_root')) $default_root = $replaceme_ini->get('object_root');
+
+// 指定项目根目录
+root:
+Func::logPrimary("请指定项目根目录(默认:$default_root): ", false);
+$root = trim(fgets(STDIN));
+$root = $root ?: $default_root;
+if (!is_dir($root)) {
+    Func::logInfo('你所在目录:' . __DIR__);
+    Func::logError($root);
+    Func::logError("此目录不存在, 请重新输入!");
+    goto root;
+}
+$root = Func::hasSuffix($root, '/') ? $root : $root .= '/';
+
+// 判断是否为回滚操作
+if ($argc === 2 && $argv[1] === '--rollback') {
+    (new Rollback)->setFileSuffix()->run();
+    exit(0);
+}
+
+// 非回滚操作则配置备份后缀
+$replaceme_ini->set('backup_suffix', $backup);
+
+/**
+ * 读取配置文件
+ */
+class Config
+{
+    private string $file;
+    public array $all = [];
+
+    public function __construct($file)
+    {
+        $this->file = $file;
+        if (is_file($file)) {
+            $rs = parse_ini_file($file);
+            if ($rs !== false) $this->all = $rs;
+        }
+    }
+
+    public function get($key, $default = null)
+    {
+        if (!is_file($this->file)) return $default;
+        return $this->all[$key] ?? $default;
+    }
+
+    public function set($key, $value): bool
+    {
+        $data = array_merge($this->all, [$key => $value]);
+        return !(file_put_contents($this->file, $this->arrayToIni($data)) === false);
+    }
+
+    public function setAll($data): bool
+    {
+        $data = array_merge($this->all, $data);
+        return !(file_put_contents($this->file, $this->arrayToIni($data)) === false);
+    }
+
+    private function arrayToIni($data): string
+    {
+        if (empty($data)) return '';
+        $str = '';
+        foreach ($data as $key => $datum) {
+            $str .= "$key=$datum\r\n";
+        }
+        return $str;
     }
 }
 
+/**
+ * 支持回滚操作
+ */
+class Rollback
+{
+    private string $file_suffix;
+
+    // 设置备份文件后缀
+    public function setFileSuffix(): Rollback
+    {
+        global $replaceme_ini;
+        if ($replaceme_ini->get('backup_suffix')) {
+            $this->file_suffix = $replaceme_ini->get('backup_suffix');
+        } else {
+            Func::logError('备份不存在, 不可回滚!!!');
+            exit(1);
+        }
+
+        return $this;
+    }
+
+    // 回滚操作
+    public function run()
+    {
+        if (!$this->file_suffix) Func::logError('备份解析错误或设置备份后缀错误');
+        Func::logPrimary("即将回滚所有备份:$this->file_suffix, 是否继续: (y/n) [default n] : ", false);
+        $answer = trim(fgets(STDIN));
+        if ($answer === 'y') {
+            global $ignore;
+            global $root;
+            $ignore[] = substr($root, 0, strlen($root) - 1);
+            $this->recover('.', $ignore, $root);
+        } else {
+            Func::logPrimary('已取消操作!');
+        }
+    }
+
+    /**
+     * 删除目录及目录下所有文件或删除指定文件
+     * @param string $path 待删除目录路径
+     * @param int $del_dir 是否删除目录，1或true删除目录，0或false则只删除文件保留目录（包含子目录）
+     * @return bool 返回删除状态
+     */
+    private function delDirAndFile(string $path, $del_dir = true): bool
+    {
+        $handle = opendir($path);
+        if ($handle) {
+            while (false !== ($item = readdir($handle))) {
+                if ($item != "." && $item != "..")
+                    is_dir("$path/$item") ? $this->delDirAndFile("$path/$item", $del_dir) : unlink("$path/$item");
+            }
+            closedir($handle);
+            if ($del_dir) {
+                return rmdir($path);
+            } else {
+                return true;
+            }
+        } else {
+            if (file_exists($path)) {
+                return unlink($path);
+            } else {
+                return false;
+            }
+        }
+    }
+
+    private function recover($path, $ignore, $root)
+    {
+        foreach (glob($path, GLOB_BRACE) as $file) {
+            // 单独处理vendor目录
+            if ($file === './vendor') {
+                Func::logInfo('当前目录恢复时间可能较长, 请耐心等待...');
+                $del_target = $root . str_replace('./', '', $file);
+                $target = $root . str_replace('./', '', $file) . $this->file_suffix;
+                if (is_dir($target)) {
+                    if (!is_dir($del_target)) {
+                        Func::logWarn("目录不存在: $del_target");
+                        if (rename($target, $del_target)) {
+                            Func::logSuccess("备份恢复成功: $target -> $del_target");
+                        } else {
+                            Func::logError("备份恢复失败: 请尝试手动恢复: $target -> $del_target");
+                        }
+                    } else {
+                        if ($this->delDirAndFile($del_target)) {
+                            if (rename($target, $del_target)) {
+                                Func::logSuccess("备份恢复成功: $target -> $del_target");
+                            } else {
+                                Func::logError("备份恢复失败: 请尝试手动恢复: $target -> $del_target");
+                            }
+                        } else {
+                            Func::logError("删除更新失败: 请尝试手动恢复: $target -> $del_target");
+                        }
+                    }
+                } else {
+                    if (!is_dir($del_target)) {
+                        Func::logWarn("目录不存在: $del_target");
+                        continue;
+                    }
+                    if ($this->delDirAndFile($del_target)) {
+                        Func::logSuccess("删除成功: $del_target");
+                    } else {
+                        Func::logError("恢复失败: 请尝试手动删除: $del_target");
+                    }
+                }
+                continue;
+            }
+            if (in_array($file, $ignore)) continue;
+            if (is_dir($file)) {
+                $this->recover($file . '/*', $ignore, $root);
+            } else {
+                $target_del = $root . str_replace('./', '', $file);
+                $backup = $root . str_replace('./', '', $file) . $this->file_suffix;
+                if (is_file($backup)) {
+                    // 先删除原文件再恢复备份
+                    if (!is_file($target_del)) {
+                        Func::logWarn("文件不存在: $target_del");
+                        if (rename($backup, $target_del)) {
+                            Func::logSuccess("备份恢复成功: $backup -> $target_del");
+                        } else {
+                            Func::logError("备份恢复失败: $backup -> $target_del");
+                        }
+                    } else {
+                        if (unlink($target_del)) {
+                            if (rename($backup, $target_del)) {
+                                Func::logSuccess("备份恢复成功: $backup -> $target_del");
+                            } else {
+                                Func::logError("备份恢复失败: $backup -> $target_del");
+                            }
+                        } else {
+                            Func::logError("恢复失败: $backup -> $target_del");
+                        }
+                    }
+                } else {
+                    // 直接删除原文件
+                    if (!is_file($target_del)) {
+                        Func::logWarn("文件不存在: $target_del");
+                        continue;
+                    }
+                    if (unlink($target_del)) {
+                        Func::logSuccess("删除成功: $target_del");
+                    } else {
+                        Func::logError("删除失败: $target_del");
+                    }
+                }
+            }
+        }
+    }
+}
 
 class Func
 {
@@ -39,6 +252,19 @@ class Func
     public static function logPrimary(string $msg = '', bool $wrap = true)
     {
         $msg = "\033[34m $msg \033[0m";
+        if ($wrap) $msg .= PHP_EOL;
+        echo $msg;
+    }
+
+    /**
+     * 命令行打印 警告消息
+     * @param string $msg
+     * @param bool $wrap 是否换行
+     * @return void
+     */
+    public static function logWarn(string $msg = '', bool $wrap = true)
+    {
+        $msg = "\033[33m $msg \033[0m";
         if ($wrap) $msg .= PHP_EOL;
         echo $msg;
     }
@@ -108,19 +334,6 @@ class Func
         return true;
     }
 }
-
-// 指定项目根目录
-root:
-Func::logPrimary("请指定项目根目录(默认:$default_root): ", false);
-$root = trim(fgets(STDIN));
-$root = $root ?: $default_root;
-if (!is_dir($root)) {
-    Func::logInfo('你所在目录:' . __DIR__);
-    Func::logError($root);
-    Func::logError("此目录不存在, 请重新输入!");
-    goto root;
-}
-$root = Func::hasSuffix($root, '/') ? $root : $root .= '/';
 
 loopDir('.', $ignore, $root, $backup);
 
