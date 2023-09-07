@@ -78,6 +78,8 @@ Please select packaging method:
 * 执行: `php ./replaceme`
 * 如需记录更新日志则这样执行: `php ./replaceme | tee zzz_exec.log`
 
+* 支持自定义备份后缀: `php ./replaceme --backup=xxx`
+
 ```shell
 # 执行过程解释
 php ./replaceme
@@ -90,8 +92,4 @@ php ./replaceme
 ### 支持回滚操作
 
 * 回滚命令: `php ./replaceme --rollback`
-
-### 支持自定义备份后缀
-
-* 自定义备份后缀: `php ./replaceme --backup=xxx`
 
