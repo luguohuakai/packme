@@ -1,21 +1,20 @@
 {
-    "name": "luguohuakai/packme",
-    "description": "packing code to tar.gz",
-    "type": "library",
-    "require": {
-        "php": ">=7.4",
-        "alchemy/zippy": "^1.0",
-        "luguohuakai/func": "~1.0.16"
-    },
-    "license": "MIT",
-    "authors": [
-        {
-            "name": "DM",
-            "email": "769245396@qq.com"
-        }
-    ],
-    "bin": [
-        "packme",
-        "replaceme"
-    ]
+  "name": "luguohuakai/packme",
+  "description": "packing code to tar.gz",
+  "type": "library",
+  "require": {
+    "php": ">=7.4",
+    "alchemy/zippy": "^1.0",
+    "luguohuakai/func": "~1.0.16"
+  },
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "DM",
+      "email": "769245396@qq.com"
+    }
+  ],
+  "bin": [
+    "packme"
+  ]
 }

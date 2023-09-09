@@ -18,8 +18,8 @@
 
 请在需要打包的项目根目录执行
 
-* Windows: `.\vendor\luguohuakai\packme\packme.bat`
-* Linux: `php vendor/luguohuakai/packme/packme`
+* Windows: `.\vendor\bin\packme.bat`
+* Linux: `php vendor/bin/packme`
 
 ```shell
 Please select packaging method:
