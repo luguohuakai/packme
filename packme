@@ -311,6 +311,20 @@ class Git
         return $object_name;
     }
 
+    // 根据分支名称获取分支创建时的 commit 和最新的 commit
+    public function branchCommitId($branch = '')
+    {
+        if (!$branch) $branch = $this->branchName();
+        exec("git reflog show $branch", $output);
+        if (!empty($output)) {
+            $old = explode(' ', array_pop($output))[0];
+            $new = explode(' ', array_shift($output))[0];
+            return [$new, $old];
+        } else {
+            return false;
+        }
+    }
+
     /**
      * @param $cmd
      * @return string|null
@@ -405,12 +419,13 @@ if (is_file($replaceme_ini_file)) $git->addFile($replaceme_ini_file);
 // 打包方式 1:全量打包(默认) 2:最近一次提交和当前未提交的文件 3:某两次提交的差异文件 4:当前已修改但未提交的文件
 Func::logInfo('Please select packaging method:');
 Func::logInfo('      [1]: Full packaging');
-Func::logInfo('      [2]: Package Last commit and current Not commit files');
-Func::logInfo('      [3]: Package Two commits different files');
-Func::logInfo('      [4]: Package Current Not commit files');
-Func::logInfo('      [5]: Package Last commit files');
-Func::logInfo('      [6]: Package the last two commit files');
-Func::logInfo('      [7]: Package the specified one-time commit');
+Func::logInfo('      [2]: Pack the most recently commit and currently not commit files');
+Func::logInfo('      [3]: Pack the difference files commit between two times');
+Func::logInfo('      [4]: Pack files that have been modified but not yet commit');
+Func::logInfo('      [5]: Pack the most recently commit files');
+Func::logInfo('      [6]: Pack the last two commit files');
+Func::logInfo('      [7]: Pack the specified one-time commit');
+Func::logInfo('      [8]: Pack specified branch');
 Func::logPrimary('Your choice (default [5]):', false);
 choice:
 $choice = trim(fgets(STDIN));
@@ -457,7 +472,7 @@ switch ($choice) {
         Func::logInfo('Please enter old commit id:', false);
         $old = trim(fgets(STDIN));
         $_old = strtoupper($old);
-        $file = "{$object_name}_UPDATE_{$time}_{$_new}_$_old.tar.gz";
+        $file = "{$object_name}_2COMMIT_{$time}_{$_new}_$_old.tar.gz";
         $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
         if ($rs !== null) {
             Func::logInfo($rs);
@@ -470,6 +485,25 @@ switch ($choice) {
         $_new = strtoupper($new);
         $file = "{$object_name}_ONE_COMMIT_{$time}_{$_new}.tar.gz";
         $rs = $git->output($file)->newCommit($new)->oldCommit($new . '~')->run();
+        if ($rs !== null) {
+            Func::logInfo($rs);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
+        }
+        exit(0);
+    case 8:
+        Func::logInfo('Please enter the branch name(default:current branch):', false);
+        $branch = trim(fgets(STDIN));
+        $rs = $git->branchCommitId($branch);
+        if (empty($rs)) {
+            Func::logError('Not found any commit');
+            exit(1);
+        }
+        $new = $rs[0];
+        $_new = strtoupper($new);
+        $old = $rs[1];
+        $_old = strtoupper($old);
+        $file = "{$object_name}_BRANCH_{$time}_{$_new}_$_old.tar.gz";
+        $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
         if ($rs !== null) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $git->getOutPutFile());

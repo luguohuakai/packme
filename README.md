@@ -28,18 +28,20 @@ Please select packaging method:
       # 全量打包时version.ini会自动打包进项目根目录
       [1]: Full packaging
       # 打包最近一次提交和当前未提交的文件
-      [2]: Package Last commit and current Not commit files
+      [2]: Pack the most recently commit and currently not commit files
       # 打包某两次提交的差异文件(需要输入两次提交的commit id 短hash)
       # 注意: 打包差异文件不包括old_commit_id的文件, 包括new_commit_id的文件
-      [3]: Package Two commits different files
+      [3]: Pack the difference files commit between two times
       # 打包当前已修改但未提交的文件(注意: 如果当前没有修改的文件会进行全量打包)
-      [4]: Package Current Not commit files
+      [4]: Pack files that have been modified but not yet commit
       # 打包最近一次提交的文件
-      [5]: Package Last commit files
+      [5]: Pack the most recently commit files
       # 打包最近两次提交的文件
-      [6]: Package the last two commit files
+      [6]: Pack the last two commit files
       # 打包指定的一次提交
-      [7]: Package the specified one-time commit
+      [7]: Pack the specified one-time commit
+      # 打包指定分支 默认为当前分支
+      [8]: Pack specified branch
  Your choice (default [1]): 
 ```
 
