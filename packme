@@ -241,8 +241,12 @@ class Git
             file_put_contents($this->change_file, $arr[0] . $separator . PHP_EOL . PHP_EOL);
         } else {
             Func::logWarn('Change file contents is empty: ' . $this->change_file);
-            $readme = './vendor/luguohuakai/packme/README.md';
-//            $readme = './README.md';
+            if (is_file('./vendor/luguohuakai/packme/README.md')) {
+                $readme = './vendor/luguohuakai/packme/README.md';
+            } else {
+                // 测试时使用
+                $readme = './README.md';
+            }
             if (is_file($readme)) {
                 $separator2 = '## replaceme';
                 $replaceme_doc = explode($separator2, file_get_contents($readme))[1];
@@ -406,14 +410,16 @@ Func::logInfo('      [3]: Package Two commits different files');
 Func::logInfo('      [4]: Package Current Not commit files');
 Func::logInfo('      [5]: Package Last commit files');
 Func::logInfo('      [6]: Package the last two commit files');
-Func::logPrimary('Your choice (default [1]):', false);
+Func::logInfo('      [7]: Package the specified one-time commit');
+Func::logPrimary('Your choice (default [5]):', false);
 choice:
 $choice = trim(fgets(STDIN));
+if ($choice == '') $choice = 5;
 $time = date('mdy');
 $last_hash = strtoupper($git->hashShort());
 switch ($choice) {
     case 2:
-        $file = "{$object_name}_LAST_COMMIT_{$time}_$last_hash.tar.gz";
+        $file = "{$object_name}_LAST2NOW_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('NOW')->oldCommit('HEAD~1')->run();
         if ($rs !== null) {
             Func::logInfo($rs);
@@ -421,7 +427,7 @@ switch ($choice) {
         }
         exit(0);
     case 5:
-        $file = "{$object_name}_LAST_COMMIT1_{$time}_$last_hash.tar.gz";
+        $file = "{$object_name}_LAST1COMMIT_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~1')->run();
         if ($rs !== null) {
             Func::logInfo($rs);
@@ -429,7 +435,7 @@ switch ($choice) {
         }
         exit(0);
     case 6:
-        $file = "{$object_name}_LAST_COMMIT2_{$time}_$last_hash.tar.gz";
+        $file = "{$object_name}_LAST2COMMIT_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~2')->run();
         if ($rs !== null) {
             Func::logInfo($rs);
@@ -437,7 +443,7 @@ switch ($choice) {
         }
         exit(0);
     case 4:
-        $file = "{$object_name}_LAST_UPDATE_{$time}_$last_hash.tar.gz";
+        $file = "{$object_name}_NOT_COMMIT_{$time}_$last_hash.tar.gz";
         $rs = $git->output($file)->newCommit('NOW')->run();
         if ($rs !== null) {
             Func::logInfo($rs);
@@ -453,6 +459,17 @@ switch ($choice) {
         $_old = strtoupper($old);
         $file = "{$object_name}_UPDATE_{$time}_{$_new}_$_old.tar.gz";
         $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
+        if ($rs !== null) {
+            Func::logInfo($rs);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
+        }
+        exit(0);
+    case 7:
+        Func::logInfo('Please enter the commit id:', false);
+        $new = trim(fgets(STDIN));
+        $_new = strtoupper($new);
+        $file = "{$object_name}_ONE_COMMIT_{$time}_{$_new}.tar.gz";
+        $rs = $git->output($file)->newCommit($new)->oldCommit($new . '~')->run();
         if ($rs !== null) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $git->getOutPutFile());

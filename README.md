@@ -38,6 +38,8 @@ Please select packaging method:
       [5]: Package Last commit files
       # 打包最近两次提交的文件
       [6]: Package the last two commit files
+      # 打包指定的一次提交
+      [7]: Package the specified one-time commit
  Your choice (default [1]): 
 ```
 
