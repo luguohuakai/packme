@@ -59,11 +59,7 @@ Please select packaging method:
 ### 已知问题
 
 ```
-当git提交中存在删除文件操作时, 会导致打包不成功
-报错: fatal: pathspec 'xxx' did not match any files
-目前没有很好的解决办法
-只能尽量避开有删除文件的提交进行打包
-缺陷正在修复中...
+打包没有文件变更的提交(只有文件删除)时会进行全量打包
 ```
 
 ## replaceme
