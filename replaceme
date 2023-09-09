@@ -27,7 +27,7 @@ $root = Func::hasSuffix($root, '/') ? $root : $root .= '/';
 
 // 判断是否为回滚操作
 if ($argc === 2 && $argv[1] === '--rollback') {
-    (new Rollback)->setFileSuffix()->run();
+    (new Rollback)->run();
     exit(0);
 }
 
@@ -38,6 +38,7 @@ if ($argc === 2 && Func::hasPrefix($argv[1], '--backup=')) {
 
 // 非回滚操作则配置备份后缀
 $replaceme_ini->set('backup_suffix', $backup);
+$replaceme_ini->set('install_time', date('Y-m-d H:i:s'));
 
 /**
  * 读取配置文件
@@ -90,12 +91,17 @@ class Config
  */
 class Rollback
 {
+    // 备份文件后缀
     private string $file_suffix;
 
     // 设置备份文件后缀
-    public function setFileSuffix(): Rollback
+    public function beforeRollback(): Rollback
     {
         global $replaceme_ini;
+        if ($replaceme_ini->get('rollback_time')) {
+            Func::logError('已回滚过, 请勿重复操作, 上次回滚时间: ' . $replaceme_ini->get('rollback_time'));
+            exit(1);
+        }
         if ($replaceme_ini->get('backup_suffix')) {
             $this->file_suffix = $replaceme_ini->get('backup_suffix');
         } else {
@@ -109,12 +115,13 @@ class Rollback
     // 回滚操作
     public function run()
     {
+        $this->beforeRollback();
         if (!$this->file_suffix) Func::logError('备份解析错误或设置备份后缀错误');
         Func::logPrimary("即将回滚所有备份:$this->file_suffix, 是否继续: (y/n) [default n] : ", false);
         $answer = trim(fgets(STDIN));
         if ($answer === 'y') {
-            global $ignore;
-            global $root;
+            global $replaceme_ini, $ignore, $root;
+            $replaceme_ini->set('rollback_time', date('Y-m-d H:i:s'));
             $ignore[] = substr($root, 0, strlen($root) - 1);
             $this->recover('.', $ignore, $root);
         } else {
