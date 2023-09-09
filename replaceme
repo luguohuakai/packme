@@ -69,12 +69,6 @@ class Config
         return !(file_put_contents($this->file, $this->arrayToIni($data)) === false);
     }
 
-    public function setAll($data): bool
-    {
-        $data = array_merge($this->all, $data);
-        return !(file_put_contents($this->file, $this->arrayToIni($data)) === false);
-    }
-
     private function arrayToIni($data): string
     {
         if (empty($data)) return '';

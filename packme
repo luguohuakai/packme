@@ -483,7 +483,7 @@ switch ($choice) {
         Func::logInfo('Please enter the commit id:', false);
         $new = trim(fgets(STDIN));
         $_new = strtoupper($new);
-        $file = "{$object_name}_ONE_COMMIT_{$time}_{$_new}.tar.gz";
+        $file = "{$object_name}_ONE_COMMIT_{$time}_$_new.tar.gz";
         $rs = $git->output($file)->newCommit($new)->oldCommit($new . '~')->run();
         if ($rs !== null) {
             Func::logInfo($rs);
