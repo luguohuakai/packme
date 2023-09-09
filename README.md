@@ -40,9 +40,9 @@ Please select packaging method:
       [6]: Pack the last two commit files
       # 打包指定的一次提交
       [7]: Pack the specified one-time commit
-      # 打包指定分支 默认为当前分支
+      # 打包指定分支 默认为当前分支 (打包从分支创建到当前最新commit的变更文件)
       [8]: Pack specified branch
- Your choice (default [1]): 
+ Your choice (default [5]): 
 ```
 
 * 打包产物将生成于`./dist/`目录下
