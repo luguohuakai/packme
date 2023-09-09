@@ -13,5 +13,9 @@
             "name": "DM",
             "email": "769245396@qq.com"
         }
+    ],
+    "bin": [
+        "packme",
+        "replaceme"
     ]
 }
