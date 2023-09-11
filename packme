@@ -430,7 +430,7 @@ Func::logPrimary('Your choice (default [5]):', false);
 choice:
 $choice = trim(fgets(STDIN));
 if ($choice == '') $choice = 5;
-$time = date('mdy');
+$time = date('ymdHis');
 $last_hash = strtoupper($git->hashShort());
 switch ($choice) {
     case 2:

@@ -60,6 +60,7 @@ Please select packaging method:
 
 ```
 打包没有文件变更的提交(只有文件删除)时会进行全量打包
+修复方案 无文件变更时停止打包
 ```
 
 ## replaceme
@@ -87,5 +88,6 @@ php ./replaceme
 
 ### 支持回滚操作
 
+* 只能回滚当前安装包内的文件
 * 回滚命令: `php ./replaceme --rollback`
 
