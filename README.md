@@ -72,7 +72,7 @@ Please select packaging method:
 * 如: `tar -zxf xxx.tar.gz -C ./test`
 * 进入解压后的目录
 * 如: `cd test`
-* 执行: `php ./replaceme`
+* 执行: `php ./replaceme` (老版本PHP5请执行`php ./replaceme5`, 下面不再赘述)
 * 如需记录更新日志则这样执行: `php ./replaceme | tee zzz_exec.log`
 
 * 支持自定义备份后缀: `php ./replaceme --backup=xxx`

@@ -348,7 +348,9 @@ class Git
 
 $git = new Git;
 $replaceme = './vendor/luguohuakai/packme/replaceme';
+$replaceme5 = './vendor/luguohuakai/packme/replaceme5';
 if (is_file($replaceme)) $git->addFile($replaceme);
+if (is_file($replaceme5)) $git->addFile($replaceme5);
 
 $object_name = strtoupper($git->objectName());
 // : 自动判断当前项目根目录并生成replaceme.ini文件
