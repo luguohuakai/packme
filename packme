@@ -95,6 +95,7 @@ class Git
      * @var string
      */
     private string $change_file = './dist/changes.txt';
+    private string $change_file_pro = './dist/changes_pro.txt';
 
     public string $cmd = '';
 
@@ -105,6 +106,7 @@ class Git
     public function output(string $output): Git
     {
         $this->output = $output;
+        $this->change_file_pro = $this->dist . $this->output . '.txt';
         return $this;
     }
 
@@ -223,7 +225,7 @@ class Git
         }
 
         // 生成和压缩包同名的说明文件用以解释压缩包, 而不用打开压缩包查看changes.txt
-        copy($this->change_file, $this->dist . $this->output . '.txt');
+        copy($this->change_file, $this->change_file_pro);
     }
 
     /**
@@ -264,6 +266,7 @@ class Git
     public function run(): ?string
     {
         $this->addFile($this->change_file);
+        $this->addFile($this->change_file_pro);
         if (!$this->cmd) $this->prepare();
         if (PHP_OS === 'WINNT' && !$this->branch) {
             $ps = $this->execGit('where powershell');
