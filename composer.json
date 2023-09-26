@@ -1,6 +1,13 @@
 {
   "name": "luguohuakai/packme",
   "description": "packing code to tar.gz",
+  "keywords": [
+    "tar",
+    "package",
+    "compression",
+    "packme",
+    "archive"
+  ],
   "type": "library",
   "require": {
     "php": ">=7.4",
@@ -11,7 +18,8 @@
   "authors": [
     {
       "name": "DM",
-      "email": "769245396@qq.com"
+      "email": "769245396@qq.com",
+      "homepage": "https://github.com/luguohuakai/packme.git"
     }
   ],
   "bin": [
