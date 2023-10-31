@@ -353,9 +353,9 @@ class Func
     }
 }
 
-loopDir('.', $ignore, $root, $backup);
+loopDir('.', $ignore, $root, $backup, $replaceme_ini->get('ignore_dir_prefix'));
 
-function loopDir($path, $ignore, $root, $backup)
+function loopDir($path, $ignore, $root, $backup, $ignore_dir_prefix = '')
 {
     foreach (glob($path, GLOB_BRACE) as $file) {
         if ($file === './vendor') {
@@ -383,21 +383,22 @@ function loopDir($path, $ignore, $root, $backup)
         }
         if (in_array($file, $ignore)) continue;
         if (is_dir($file)) {
-            loopDir($file . '/*', $ignore, $root, $backup);
+            loopDir($file . '/*', $ignore, $root, $backup, $ignore_dir_prefix);
         } else {
             // 备份(重命名) -> 替换(cp 拷贝)
             $target = $root . str_replace('./', '', $file);
+            if ($ignore_dir_prefix) $target = str_replace($ignore_dir_prefix, '', $target);
             if (is_file($target)) {
                 // 备份
                 if (rename($target, $target . $backup)) {
                     Func::logSuccess("备份成功: $target -> $target$backup");
                     if (copy($file, $target)) {
-                        Func::logSuccess("替换成功: $target");
+                        Func::logSuccess("替换成功: $file -> $target");
                     } else {
-                        Func::logError("替换失败: $target");
+                        Func::logError("替换失败: $file -> $target");
                     }
                 } else {
-                    Func::logError("备份失败: $target");
+                    Func::logError("备份失败: $file -> $target");
                 }
             } else {
                 // 创建
@@ -407,12 +408,14 @@ function loopDir($path, $ignore, $root, $backup)
                     if (!mkdir($target_dir, 0755, true)) {
                         Func::logError("创建目录失败:$target_dir");
                         continue;
+                    } else {
+                        Func::logInfo("创建目录:$target_dir");
                     }
                 }
                 if (copy($file, $target)) {
-                    Func::logSuccess("创建成功: $target");
+                    Func::logSuccess("创建成功: $file -> $target");
                 } else {
-                    Func::logError("创建失败: $target");
+                    Func::logError("创建失败: $file -> $target");
                 }
             }
         }

@@ -421,6 +421,9 @@ switch ($object_name) {
     case strtoupper('MicroDraw'):
         $replaceme_ini->set('object_root', '/srun3/www/srun_mq/');
         break;
+    case strtoupper('zabbixFromGithub'):
+        $replaceme_ini->set('object_root', '/usr/share/zabbix/');
+        break;
 }
 if (is_file($replaceme_ini_file)) $git->addFile($replaceme_ini_file);
 

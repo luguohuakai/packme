@@ -63,6 +63,23 @@ Please select packaging method:
 修复方案 无文件变更时停止打包
 ```
 
+# replaceme
+
+> replaceme.ini配置说明
+
+```shell
+# 要替换的项目在服务器上的绝对路径(自动生成)(可以更改)
+object_root = /srun3/www/srun4-mgr/
+# 备份文件后缀名(自动生成)(不可更改)
+backup_suffix = 20230906011724
+# 安装包中需要忽略的目录前缀(按需手动配置)(默认为空)
+# 如: 
+# 安装包中目录为: `ui/assets/img/icon-sprite.svg`
+# 服务器中目录为: `/usr/share/zabbix/assets/img/icon-sprite.svg`
+# 则需要配置为: 忽略安装包中 `ui/` 
+ignore_dir_prefix = ui/
+```
+
 ## replaceme
 
 ### 部署
