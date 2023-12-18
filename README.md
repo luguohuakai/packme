@@ -59,6 +59,11 @@ Please select packaging method:
 ### 已知问题
 
 ```
+文件名存在中文时打包出错,可能是本地环境配置问题
+执行以下命令:
+git config --global core.quotepath false
+git config --global core.assumeunicode true
+
 打包没有文件变更的提交(只有文件删除)时会进行全量打包
 修复方案 无文件变更时停止打包
 ```
