@@ -59,13 +59,27 @@ Please select packaging method:
 ### 已知问题
 
 ```
-文件名存在中文时打包出错,可能是本地环境配置问题
+1. 文件名存在中文时打包出错,可能是本地环境配置问题
 执行以下命令:
 git config --global core.quotepath false
 git config --global core.assumeunicode true
 
-打包没有文件变更的提交(只有文件删除)时会进行全量打包
+2. 打包没有文件变更的提交(只有文件删除)时会进行全量打包
 修复方案 无文件变更时停止打包
+
+3. 新增文件,然后选择[4]进行打包会报错 如:
+Please select packaging method:
+      [1]: Full packaging
+      [2]: Pack the most recently commit and currently not commit files
+      [3]: Pack the difference files commit between two times
+      [4]: Pack files that have been modified but not yet commit
+      [5]: Pack the most recently commit files
+      [6]: Pack the last two commit files
+      [7]: Pack the specified one-time commit
+      [8]: Pack specified branch
+ Your choice (default [5]): 4
+Change file exists: ./dist/changes.txt
+fatal: pathspec '测试中文文件能否打包和安装.md' did not match any files
 ```
 
 # replaceme
