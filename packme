@@ -424,6 +424,9 @@ switch ($object_name) {
     case strtoupper('zabbixFromGithub'):
         $replaceme_ini->set('object_root', '/usr/share/zabbix/');
         break;
+    case strtoupper('packme'):
+        $replaceme_ini->set('object_root', '/packme/');
+        break;
 }
 if (is_file($replaceme_ini_file)) $git->addFile($replaceme_ini_file);
 
@@ -437,12 +440,51 @@ Func::logInfo('      [5]: Pack the most recently commit files');
 Func::logInfo('      [6]: Pack the last two commit files');
 Func::logInfo('      [7]: Pack the specified one-time commit');
 Func::logInfo('      [8]: Pack specified branch');
+Func::logInfo('      [9]: Pack specified path');
 Func::logPrimary('Your choice (default [5]):', false);
 choice:
 $choice = trim(fgets(STDIN));
 if ($choice == '') $choice = 5;
 $time = date('ymdHis');
 $last_hash = strtoupper($git->hashShort());
+function packPath($file)
+{
+
+    Func::logPrimary("If you have any instructions about this installation package, please write them in advance './dist/changes.txt'");
+    input:
+    Func::logInfo('Please enter the path to be packaged:', false);
+    $path = trim(fgets(STDIN));
+    if ($path == '') {
+        Func::logError('Path cannot be empty');
+        goto input;
+    } else if (!is_dir($path) && !is_file($path)) {
+        Func::logError('Path not exists');
+        goto input;
+    } else {
+        $zippy = Zippy::load();
+        $tar_file = str_replace('.gz', '', $file);
+        $tar = $zippy->create($tar_file);
+        if (is_file($path)) {
+            $tar->addMembers([$path => $path]);
+            $path = '';
+        } else {
+            $tar->addMembers([$path]);
+        }
+        if (is_file('./replaceme.ini')) $tar->addMembers([$path . '/replaceme.ini' => './replaceme.ini']);
+        global $replaceme, $replaceme5;
+        if (is_file('./replaceme')) $tar->addMembers([$path . '/replaceme' => './replaceme']);
+        if (is_file($replaceme)) $tar->addMembers([$path . '/replaceme' => $replaceme]);
+        if (is_file('./replaceme5')) $tar->addMembers([$path . '/replaceme5' => './replaceme5']);
+        if (is_file($replaceme5)) $tar->addMembers([$path . '/replaceme5' => $replaceme5]);
+        if (is_file('./dist/changes.txt')) $tar->addMembers([$path . '/changes.txt' => './dist/changes.txt']);
+
+        $zippy->create($file, $tar_file);
+        unlink($tar_file);
+
+        Func::logPrimary('Generated File: ' . $file);
+    }
+}
+
 switch ($choice) {
     case 2:
         $file = "{$object_name}_LAST2NOW_{$time}_$last_hash.tar.gz";
@@ -519,6 +561,10 @@ switch ($choice) {
             Func::logInfo($rs);
             Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         }
+        exit(0);
+    case 9:
+        $file = "./dist/{$object_name}_PATH_$time.tar.gz";
+        packPath($file);
         exit(0);
     case 1:
     case '':
