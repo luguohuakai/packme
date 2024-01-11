@@ -479,9 +479,9 @@ function packPath($file)
         $r = str_replace('./', '', $replaceme);
         $r5 = str_replace('./', '', $replaceme5);
         if (is_file('replaceme')) $tar->addMembers([$dir . 'replaceme' => 'replaceme']);
-        if (is_file($r)) $tar->addMembers([$dir . $r => $r]);
+        if (is_file($r)) $tar->addMembers([$dir . 'replaceme' => $r]);
         if (is_file('replaceme5')) $tar->addMembers([$dir . 'replaceme5' => 'replaceme5']);
-        if (is_file($r5)) $tar->addMembers([$dir . $r5 => $r5]);
+        if (is_file($r5)) $tar->addMembers([$dir . 'replaceme5' => $r5]);
         if (is_file('dist/changes.txt')) $tar->addMembers([$dir . 'changes.txt' => 'dist/changes.txt']);
 
 
