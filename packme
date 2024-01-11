@@ -449,7 +449,6 @@ $time = date('ymdHis');
 $last_hash = strtoupper($git->hashShort());
 function packPath($file)
 {
-
     Func::logPrimary("If you have any instructions about this installation package, please write them in advance './dist/changes.txt'");
     input:
     Func::logInfo('Please enter the path to be packaged:', false);
@@ -464,19 +463,28 @@ function packPath($file)
         $zippy = Zippy::load();
         $tar_file = str_replace('.gz', '', $file);
         $tar = $zippy->create($tar_file);
-        if (is_file($path)) {
-            $tar->addMembers([$path => $path]);
-            $path = '';
-        } else {
-            $tar->addMembers([$path]);
+        $tar->addMembers([$path]);
+        $dir = '';
+        if (is_dir($path)) {
+            $dirArr = explode('/', $path);
+            $dir = $dirArr[count($dirArr) - 1] . '/';
         }
-        if (is_file('./replaceme.ini')) $tar->addMembers([$path . '/replaceme.ini' => './replaceme.ini']);
+
+        // 指定项目根路径
+        global $replaceme_ini;
+        $replaceme_ini->set('object_root', '/srun3/www/');
+
+        if (is_file('replaceme.ini')) $tar->addMembers([$dir . 'replaceme.ini' => 'replaceme.ini']);
         global $replaceme, $replaceme5;
-        if (is_file('./replaceme')) $tar->addMembers([$path . '/replaceme' => './replaceme']);
-        if (is_file($replaceme)) $tar->addMembers([$path . '/replaceme' => $replaceme]);
-        if (is_file('./replaceme5')) $tar->addMembers([$path . '/replaceme5' => './replaceme5']);
-        if (is_file($replaceme5)) $tar->addMembers([$path . '/replaceme5' => $replaceme5]);
-        if (is_file('./dist/changes.txt')) $tar->addMembers([$path . '/changes.txt' => './dist/changes.txt']);
+        $r = str_replace('./', '', $replaceme);
+        $r5 = str_replace('./', '', $replaceme5);
+        if (is_file('replaceme')) $tar->addMembers([$dir . 'replaceme' => 'replaceme']);
+        if (is_file($r)) $tar->addMembers([$dir . $r => $r]);
+        if (is_file('replaceme5')) $tar->addMembers([$dir . 'replaceme5' => 'replaceme5']);
+        if (is_file($r5)) $tar->addMembers([$dir . $r5 => $r5]);
+        if (is_file('dist/changes.txt')) $tar->addMembers([$dir . 'changes.txt' => 'dist/changes.txt']);
+
+
 
         $zippy->create($file, $tar_file);
         unlink($tar_file);

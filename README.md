@@ -14,7 +14,8 @@
 
 ## packme
 
-> 注意: 项目必须使用Git进行管理
+> 注意: 项目必须使用Git进行管理<br>
+> 注意: 项目中尽量不要出现中文路径和文件名, 否则打包时可能会出现问题
 
 请在需要打包的项目根目录执行
 
@@ -42,6 +43,8 @@ Please select packaging method:
       [7]: Pack the specified one-time commit
       # 打包指定分支 默认为当前分支 (打包从分支创建到当前最新commit的变更文件)
       [8]: Pack specified branch
+      # 打包指定目录(注意:不要出现中文路径或文件名)
+      [9]: Pack specified path
  Your choice (default [5]): 
 ```
 
