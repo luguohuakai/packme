@@ -484,8 +484,6 @@ function packPath($file)
         if (is_file($r5)) $tar->addMembers([$dir . 'replaceme5' => $r5]);
         if (is_file('dist/changes.txt')) $tar->addMembers([$dir . 'changes.txt' => 'dist/changes.txt']);
 
-
-
         $zippy->create($file, $tar_file);
         unlink($tar_file);
 

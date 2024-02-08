@@ -8,7 +8,7 @@
 >
 > PACKME就是为了解决这些恼人问题, 提升开发愉悦感的小工具, 无论研发还是一线都只需一键执行即可完成打包和部署
 
-> composer require luguohuakai/packme:~1.0.0
+> composer require --dev luguohuakai/packme:~1.0.0
 >
 > 环境依赖: php>=7.4/git/zippy
 
