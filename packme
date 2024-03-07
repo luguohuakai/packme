@@ -265,9 +265,9 @@ class Git
 
     public function run(): ?string
     {
-        $this->addFile($this->change_file);
-        $this->addFile($this->change_file_pro);
         if (!$this->cmd) $this->prepare();
+        if (is_file($this->change_file))$this->addFile($this->change_file);
+        if (is_file($this->change_file_pro)) $this->addFile($this->change_file_pro);
         if (PHP_OS === 'WINNT' && !$this->branch) {
             $ps = $this->execGit('where powershell');
             if ($ps) {
