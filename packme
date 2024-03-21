@@ -482,13 +482,48 @@ function packPath($file)
         if (is_file($r)) $tar->addMembers([$dir . 'replaceme' => $r]);
         if (is_file('replaceme5')) $tar->addMembers([$dir . 'replaceme5' => 'replaceme5']);
         if (is_file($r5)) $tar->addMembers([$dir . 'replaceme5' => $r5]);
-        if (is_file('dist/changes.txt')) $tar->addMembers([$dir . 'changes.txt' => 'dist/changes.txt']);
+        if (is_file('dist/changes.txt')) {
+            $filePath = getRelativeFilePathsInSpecifyDirectory($dir);
+            if ($filePath) {
+                $content = "\nChange Files\n";
+                $content .= implode("\n", $filePath);
+                file_put_contents('dist/changes.txt', $content, FILE_APPEND);
+            }
+            $tar->addMembers([$dir . 'changes.txt' => 'dist/changes.txt']);
+        }
 
         $zippy->create($file, $tar_file);
         unlink($tar_file);
 
         Func::logPrimary('Generated File: ' . $file);
     }
+}
+
+// 写一个获取指定目录的结构并返回数组的方法
+function getRelativeFilePathsInSpecifyDirectory($dir): array
+{
+    // 获取test目录的绝对路径
+    $testDir = realpath('.' . DIRECTORY_SEPARATOR . $dir);
+
+    // 初始化存储相对路径的数组
+    $relativePaths = [];
+
+    // 遍历test目录及其子目录
+    $objects = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($testDir, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST,
+        RecursiveIteratorIterator::CATCH_GET_CHILD // Ignore "Permission denied"
+    );
+
+    foreach ($objects as $name => $object) {
+        if ($object->isFile()) {
+            // 计算相对于$baseDir的相对路径
+            $relativePath = substr($name, strlen($testDir) + 1);
+            $relativePaths[] = $relativePath;
+        }
+    }
+
+    return $relativePaths;
 }
 
 switch ($choice) {
