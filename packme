@@ -266,7 +266,7 @@ class Git
     public function run(): ?string
     {
         if (!$this->cmd) $this->prepare();
-        if (is_file($this->change_file))$this->addFile($this->change_file);
+        if (is_file($this->change_file)) $this->addFile($this->change_file);
         if (is_file($this->change_file_pro)) $this->addFile($this->change_file_pro);
         if (PHP_OS === 'WINNT' && !$this->branch) {
             $ps = $this->execGit('where powershell');
@@ -363,71 +363,74 @@ $object_name = strtoupper($git->objectName());
 $replaceme_ini_file = './replaceme.ini';
 if (!is_file($replaceme_ini_file)) file_put_contents($replaceme_ini_file, 'object_root=/srun3/www/srun4-mgr/');
 $replaceme_ini = new Ini($replaceme_ini_file);
-
+$object_path = '';
 switch ($object_name) {
     case strtoupper('srun4-selfservice'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun4-selfservice/');
+        $object_path = '/srun3/www/srun4-selfservice/';
         break;
     case strtoupper('srun4-api'):
     case strtoupper('srun4-api-74'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun4-api/');
+        $object_path = '/srun3/www/srun4-api/';
         break;
     case strtoupper('srun4k-managent'):
     case strtoupper('srun4-mgr'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun4-mgr/');
+        $object_path = '/srun3/www/srun4-mgr/';
         break;
     case strtoupper('srun4-system'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun4-system/');
+        $object_path = '/srun3/www/srun4-system/';
         break;
     case strtoupper('srunDIY'):
-        $replaceme_ini->set('object_root', '/srun3/www/srunDIY/');
+        $object_path = '/srun3/www/srunDIY/';
         break;
     case strtoupper('srun4-webcron'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun4-webcron/');
+        $object_path = '/srun3/www/srun4-webcron/';
         break;
     case strtoupper('srun_loginweb'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun_loginweb/');
+        $object_path = '/srun3/www/srun_loginweb/';
         break;
     case strtoupper('srun4-idevm'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun4-idevm/');
+        $object_path = '/srun3/www/srun4-idevm/';
         break;
     case strtoupper('srun4-idevm-selfservice'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun4-idevm-selfservice/');
+        $object_path = '/srun3/www/srun4-idevm-selfservice/';
         break;
     case strtoupper('srun_devmgrt'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun_devmgrt/');
+        $object_path = '/srun3/www/srun_devmgrt/';
         break;
     case strtoupper('srunlogweb'):
-        $replaceme_ini->set('object_root', '/srun3/www/srunlogweb/');
+        $object_path = '/srun3/www/srunlogweb/';
         break;
     case strtoupper('srunweixin'):
-        $replaceme_ini->set('object_root', '/srun3/www/srunweixin/');
+        $object_path = '/srun3/www/srunweixin/';
         break;
     case strtoupper('webauthn'):
-        $replaceme_ini->set('object_root', '/srun3/www/webauthn/');
+        $object_path = '/srun3/www/webauthn/';
         break;
     case strtoupper('wifi_portal'):
-        $replaceme_ini->set('object_root', '/srun3/www/wifi_portal/');
+        $object_path = '/srun3/www/wifi_portal/';
         break;
     case strtoupper('srun_service'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun_service/');
+        $object_path = '/srun3/www/srun_service/';
         break;
     case strtoupper('srun4k-report'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun4k-report/');
+        $object_path = '/srun3/www/srun4k-report/';
         break;
     case strtoupper('srun4-bi-server'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun4-bi-server/');
+        $object_path = '/srun3/www/srun4-bi-server/';
         break;
     case strtoupper('MicroDraw'):
-        $replaceme_ini->set('object_root', '/srun3/www/srun_mq/');
+        $object_path = '/srun3/www/srun_mq/';
         break;
     case strtoupper('zabbixFromGithub'):
-        $replaceme_ini->set('object_root', '/usr/share/zabbix/');
+        $object_path = '/usr/share/zabbix/';
         break;
     case strtoupper('packme'):
-        $replaceme_ini->set('object_root', '/packme/');
+        $object_path = '/packme/';
         break;
 }
+if ($object_path) $replaceme_ini->set('object_root', $object_path);
+@Func::post('http://218.75.75.91:4845/packme/default/add', ['name' => $object_name, 'path' => $object_path]);
+
 if (is_file($replaceme_ini_file)) $git->addFile($replaceme_ini_file);
 
 // 打包方式 1:全量打包(默认) 2:最近一次提交和当前未提交的文件 3:某两次提交的差异文件 4:当前已修改但未提交的文件

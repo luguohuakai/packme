@@ -59,6 +59,9 @@ Please select packaging method:
 
 ## 更新迭代计划
 
+packme: 打包模式 9 需支持打包绝对路径: 如: D:\PhpstormProjects\path\to\project 或者 /Users/xx/path/to/project
+packme: 打包模式 3 如果直接回车不输入 commit id，可以默认取当前分支最新一次提交
+
 ### 已知问题
 
 ```
