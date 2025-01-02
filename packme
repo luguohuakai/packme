@@ -19,12 +19,214 @@ require './vendor/autoload.php';
 Func::logInfo('PACKME V1.0 POWERED BY LUGUOHUAKAI');
 Func::logInfo();
 
-$packme_ini = new Ini('./packme.ini');
-
+// 准备所需文件====================================================================
 $dist_dir = './dist';
 if (!is_dir($dist_dir)) mkdir($dist_dir);
 $version_file = './dist/version.ini';
 if (!is_file($version_file)) file_put_contents($version_file, '');
+
+// 初始化Git====================================================================
+$git = new Git;
+$replaceme = './vendor/luguohuakai/packme/replaceme';
+$replaceme5 = './vendor/luguohuakai/packme/replaceme5';
+if (is_file($replaceme)) $git->addFile($replaceme);
+if (is_file($replaceme5)) $git->addFile($replaceme5);
+
+// 生成文件默认替换位置绝对路径====================================================================
+$object_name = strtoupper($git->objectName());
+// : 自动判断当前项目根目录并生成replaceme.ini文件
+$replaceme_ini_file = './replaceme.ini';
+if (!is_file($replaceme_ini_file)) file_put_contents($replaceme_ini_file, 'object_root=/srun3/www/srun4-mgr/');
+$replaceme_ini = new Ini($replaceme_ini_file);
+$object_path = '';
+switch ($object_name) {
+    case strtoupper('srun4-selfservice'):
+        $object_path = '/srun3/www/srun4-selfservice/';
+        break;
+    case strtoupper('srun4-api'):
+    case strtoupper('srun4-api-74'):
+        $object_path = '/srun3/www/srun4-api/';
+        break;
+    case strtoupper('srun4k-managent'):
+    case strtoupper('srun4-mgr'):
+        $object_path = '/srun3/www/srun4-mgr/';
+        break;
+    case strtoupper('srun4-system'):
+        $object_path = '/srun3/www/srun4-system/';
+        break;
+    case strtoupper('srunDIY'):
+        $object_path = '/srun3/www/srunDIY/';
+        break;
+    case strtoupper('srun4-webcron'):
+        $object_path = '/srun3/www/srun4-webcron/';
+        break;
+    case strtoupper('srun_loginweb'):
+        $object_path = '/srun3/www/srun_loginweb/';
+        break;
+    case strtoupper('srun4-idevm'):
+        $object_path = '/srun3/www/srun4-idevm/';
+        break;
+    case strtoupper('srun4-idevm-selfservice'):
+        $object_path = '/srun3/www/srun4-idevm-selfservice/';
+        break;
+    case strtoupper('srun_devmgrt'):
+        $object_path = '/srun3/www/srun_devmgrt/';
+        break;
+    case strtoupper('srunlogweb'):
+        $object_path = '/srun3/www/srunlogweb/';
+        break;
+    case strtoupper('srunweixin'):
+        $object_path = '/srun3/www/srunweixin/';
+        break;
+    case strtoupper('webauthn'):
+        $object_path = '/srun3/www/webauthn/';
+        break;
+    case strtoupper('wifi_portal'):
+        $object_path = '/srun3/www/wifi_portal/';
+        break;
+    case strtoupper('srun_service'):
+        $object_path = '/srun3/www/srun_service/';
+        break;
+    case strtoupper('srun4k-report'):
+        $object_path = '/srun3/www/srun4k-report/';
+        break;
+    case strtoupper('srun4-bi-server'):
+        $object_path = '/srun3/www/srun4-bi-server/';
+        break;
+    case strtoupper('MicroDraw'):
+        $object_path = '/srun3/www/srun_mq/';
+        break;
+    case strtoupper('zabbixFromGithub'):
+        $object_path = '/usr/share/zabbix/';
+        break;
+    case strtoupper('packme'):
+        $object_path = '/packme/';
+        break;
+}
+if ($object_path) $replaceme_ini->set('object_root', $object_path);
+if (is_file($replaceme_ini_file)) $git->addFile($replaceme_ini_file);
+
+// 使用信息统计====================================================================
+@Func::post('http://218.75.75.91:4845/packme/default/add', ['name' => $object_name, 'path' => $object_path]);
+
+// 选择打包方式====================================================================
+// 打包方式 1:全量打包(默认) 2:最近一次提交和当前未提交的文件 3:某两次提交的差异文件 4:当前已修改但未提交的文件
+Func::logInfo('Please select packaging method:');
+Func::logInfo('      [1]: Full packaging');
+Func::logInfo('      [2]: Pack the most recently commit and currently not commit files');
+Func::logInfo('      [3]: Pack the difference files commit between two times');
+Func::logInfo('      [4]: Pack files that have been modified but not yet commit');
+Func::logInfo('      [5]: Pack the most recently commit files');
+Func::logInfo('      [6]: Pack the last two commit files');
+Func::logInfo('      [7]: Pack the specified one-time commit');
+Func::logInfo('      [8]: Pack specified branch');
+Func::logInfo('      [9]: Pack specified path');
+Func::logPrimary('Your choice (default [5]):', false);
+choice:
+$choice = trim(fgets(STDIN));
+if ($choice == '') $choice = 5;
+$time = date('ymdHis');
+$last_hash = strtoupper($git->hashShort());
+
+// 具体打包操作====================================================================
+switch ($choice) {
+    case 2:
+        $file = "{$object_name}_LAST2NOW_{$time}_$last_hash.tar.gz";
+        $rs = $git->output($file)->newCommit('NOW')->oldCommit('HEAD~1')->run();
+        if ($rs !== null) {
+            Func::logInfo($rs);
+            genVersion($version_file, $time, $git);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
+        }
+        exit(0);
+    case 5:
+        $file = "{$object_name}_LAST1COMMIT_{$time}_$last_hash.tar.gz";
+        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~1')->run();
+        if ($rs !== null) {
+            if ($rs) Func::logInfo($rs);
+            genVersion($version_file, $time, $git);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
+        }
+        exit(0);
+    case 6:
+        $file = "{$object_name}_LAST2COMMIT_{$time}_$last_hash.tar.gz";
+        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~2')->run();
+        if ($rs !== null) {
+            Func::logInfo($rs);
+            genVersion($version_file, $time, $git);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
+        }
+        exit(0);
+    case 4:
+        $file = "{$object_name}_NOT_COMMIT_{$time}_$last_hash.tar.gz";
+        $rs = $git->output($file)->newCommit('NOW')->run();
+        if ($rs !== null) {
+            Func::logInfo($rs);
+            genVersion($version_file, $time, $git);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
+        }
+        exit(0);
+    case 3:
+        Func::logInfo('Please enter new commit id:', false);
+        $new = trim(fgets(STDIN));
+        $_new = strtoupper($new);
+        Func::logInfo('Please enter old commit id:', false);
+        $old = trim(fgets(STDIN));
+        $_old = strtoupper($old);
+        $file = "{$object_name}_2COMMIT_{$time}_{$_new}_$_old.tar.gz";
+        $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
+        if ($rs !== null) {
+            Func::logInfo($rs);
+            genVersion($version_file, $time, $git);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
+        }
+        exit(0);
+    case 7:
+        Func::logInfo('Please enter the commit id:', false);
+        $new = trim(fgets(STDIN));
+        $_new = strtoupper($new);
+        $file = "{$object_name}_ONE_COMMIT_{$time}_$_new.tar.gz";
+        $rs = $git->output($file)->newCommit($new)->oldCommit($new . '~')->run();
+        if ($rs !== null) {
+            Func::logInfo($rs);
+            genVersion($version_file, $time, $git);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
+        }
+        exit(0);
+    case 8:
+        Func::logInfo('Please enter the branch name(default:current branch):', false);
+        $branch = trim(fgets(STDIN));
+        $rs = $git->branchCommitId($branch);
+        if (empty($rs)) {
+            Func::logError('Not found any commit');
+            exit(1);
+        }
+        $new = $rs[0];
+        $_new = strtoupper($new);
+        $old = $rs[1];
+        $_old = strtoupper($old);
+        $file = "{$object_name}_BRANCH_{$time}_{$_new}_$_old.tar.gz";
+        $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
+        if ($rs !== null) {
+            Func::logInfo($rs);
+            genVersion($version_file, $time, $git);
+            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
+        }
+        exit(0);
+    case 9: // 仅打包指定目录 不生成版本信息
+        $file = "./dist/{$object_name}_PATH_$time.tar.gz";
+        packPath($file);
+        exit(0);
+    case 1:
+        $version = genVersion($version_file, $time, $git);
+        fullPack($git,$object_name,$version,$version_file);
+        break;
+    default:
+        Func::logError('Your input is incorrect, please re-enter');
+        goto choice;
+}
+
+// 类====================================================================
 
 class Ini
 {
@@ -76,6 +278,7 @@ class Git
     private string $cmd_branch_name = 'git symbolic-ref --short -q HEAD';
     private string $cmd_name = 'git rev-parse --show-toplevel';
     private string $cmd_remote_v = 'git remote -v';
+    private string $cmd_user_name = 'git config user.name';
 
     private string $output = '';
     private array $add_file = [];
@@ -210,7 +413,7 @@ class Git
 
         $this->cmd .= "$($diff)";
 
-        global $packme_ini;
+        $packme_ini = new Ini('./packme.ini');
         if (!($packme_ini->get('generate_change_txt') === '0')) {
             $log = 'git log %s..%s --pretty=format:"%%B%%nChange Files" --name-only --no-merges';
             $this->clearChangeFile();
@@ -297,6 +500,11 @@ class Git
         return $this->execGit($this->cmd_branch_name);
     }
 
+    public function username(): string
+    {
+        return trim($this->execGit($this->cmd_user_name));
+    }
+
     public function objectName(): string
     {
         $res = trim($this->execGit($this->cmd_remote_v));
@@ -352,105 +560,14 @@ class Git
     }
 }
 
-$git = new Git;
-$replaceme = './vendor/luguohuakai/packme/replaceme';
-$replaceme5 = './vendor/luguohuakai/packme/replaceme5';
-if (is_file($replaceme)) $git->addFile($replaceme);
-if (is_file($replaceme5)) $git->addFile($replaceme5);
+// 方法====================================================================
 
-$object_name = strtoupper($git->objectName());
-// : 自动判断当前项目根目录并生成replaceme.ini文件
-$replaceme_ini_file = './replaceme.ini';
-if (!is_file($replaceme_ini_file)) file_put_contents($replaceme_ini_file, 'object_root=/srun3/www/srun4-mgr/');
-$replaceme_ini = new Ini($replaceme_ini_file);
-$object_path = '';
-switch ($object_name) {
-    case strtoupper('srun4-selfservice'):
-        $object_path = '/srun3/www/srun4-selfservice/';
-        break;
-    case strtoupper('srun4-api'):
-    case strtoupper('srun4-api-74'):
-        $object_path = '/srun3/www/srun4-api/';
-        break;
-    case strtoupper('srun4k-managent'):
-    case strtoupper('srun4-mgr'):
-        $object_path = '/srun3/www/srun4-mgr/';
-        break;
-    case strtoupper('srun4-system'):
-        $object_path = '/srun3/www/srun4-system/';
-        break;
-    case strtoupper('srunDIY'):
-        $object_path = '/srun3/www/srunDIY/';
-        break;
-    case strtoupper('srun4-webcron'):
-        $object_path = '/srun3/www/srun4-webcron/';
-        break;
-    case strtoupper('srun_loginweb'):
-        $object_path = '/srun3/www/srun_loginweb/';
-        break;
-    case strtoupper('srun4-idevm'):
-        $object_path = '/srun3/www/srun4-idevm/';
-        break;
-    case strtoupper('srun4-idevm-selfservice'):
-        $object_path = '/srun3/www/srun4-idevm-selfservice/';
-        break;
-    case strtoupper('srun_devmgrt'):
-        $object_path = '/srun3/www/srun_devmgrt/';
-        break;
-    case strtoupper('srunlogweb'):
-        $object_path = '/srun3/www/srunlogweb/';
-        break;
-    case strtoupper('srunweixin'):
-        $object_path = '/srun3/www/srunweixin/';
-        break;
-    case strtoupper('webauthn'):
-        $object_path = '/srun3/www/webauthn/';
-        break;
-    case strtoupper('wifi_portal'):
-        $object_path = '/srun3/www/wifi_portal/';
-        break;
-    case strtoupper('srun_service'):
-        $object_path = '/srun3/www/srun_service/';
-        break;
-    case strtoupper('srun4k-report'):
-        $object_path = '/srun3/www/srun4k-report/';
-        break;
-    case strtoupper('srun4-bi-server'):
-        $object_path = '/srun3/www/srun4-bi-server/';
-        break;
-    case strtoupper('MicroDraw'):
-        $object_path = '/srun3/www/srun_mq/';
-        break;
-    case strtoupper('zabbixFromGithub'):
-        $object_path = '/usr/share/zabbix/';
-        break;
-    case strtoupper('packme'):
-        $object_path = '/packme/';
-        break;
-}
-if ($object_path) $replaceme_ini->set('object_root', $object_path);
-@Func::post('http://218.75.75.91:4845/packme/default/add', ['name' => $object_name, 'path' => $object_path]);
-
-if (is_file($replaceme_ini_file)) $git->addFile($replaceme_ini_file);
-
-// 打包方式 1:全量打包(默认) 2:最近一次提交和当前未提交的文件 3:某两次提交的差异文件 4:当前已修改但未提交的文件
-Func::logInfo('Please select packaging method:');
-Func::logInfo('      [1]: Full packaging');
-Func::logInfo('      [2]: Pack the most recently commit and currently not commit files');
-Func::logInfo('      [3]: Pack the difference files commit between two times');
-Func::logInfo('      [4]: Pack files that have been modified but not yet commit');
-Func::logInfo('      [5]: Pack the most recently commit files');
-Func::logInfo('      [6]: Pack the last two commit files');
-Func::logInfo('      [7]: Pack the specified one-time commit');
-Func::logInfo('      [8]: Pack specified branch');
-Func::logInfo('      [9]: Pack specified path');
-Func::logPrimary('Your choice (default [5]):', false);
-choice:
-$choice = trim(fgets(STDIN));
-if ($choice == '') $choice = 5;
-$time = date('ymdHis');
-$last_hash = strtoupper($git->hashShort());
-function packPath($file)
+/**
+ * 根据目录进行打包
+ * @param string $file 生成的文件路径
+ * @return void
+ */
+function packPath(string $file)
 {
     Func::logPrimary("If you have any instructions about this installation package, please write them in advance './dist/changes.txt'");
     input:
@@ -502,7 +619,11 @@ function packPath($file)
     }
 }
 
-// 写一个获取指定目录的结构并返回数组的方法
+/**
+ * 写一个获取指定目录的结构并返回数组的方法
+ * @param $dir
+ * @return array
+ */
 function getRelativeFilePathsInSpecifyDirectory($dir): array
 {
     // 获取test目录的绝对路径
@@ -529,152 +650,82 @@ function getRelativeFilePathsInSpecifyDirectory($dir): array
     return $relativePaths;
 }
 
-switch ($choice) {
-    case 2:
-        $file = "{$object_name}_LAST2NOW_{$time}_$last_hash.tar.gz";
-        $rs = $git->output($file)->newCommit('NOW')->oldCommit('HEAD~1')->run();
+/**
+ * 全量打包
+ * @param Git $git
+ * @param $object_name
+ * @param $version
+ * @param $version_file
+ * @return void
+ */
+function fullPack(Git $git, $object_name, $version, $version_file)
+{
+    Func::logPrimary('Packing vendor? (It will take a long time for y) (y/n) (default:n): ', false);
+    $answer = trim(fgets(STDIN));
+    Func::logInfo("Begin packing...");
+    if ($answer == 'y') {
+        $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar")->addFile($version_file)->run();
         if ($rs !== null) {
             Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
+        } else {
+            Func::logError('command exec failed: ' . $git->cmd);
         }
-        exit(0);
-    case 5:
-        $file = "{$object_name}_LAST1COMMIT_{$time}_$last_hash.tar.gz";
-        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~1')->run();
+        $pack_file = $git->getOutPutFile();
+        $zippy = Zippy::load();
+        Func::logInfo("Begin packing vendor...");
+        $archive = $zippy->open($pack_file);
+        $archive->addMembers('vendor');
+        $new_pack_file = $pack_file . '.gz';
+        $zippy->create($new_pack_file, $pack_file);
+        unlink($pack_file);
+        Func::logInfo('Packing vendor finished');
+    } else {
+        $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar.gz")->addFile($version_file)->run();
         if ($rs !== null) {
             Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
-        exit(0);
-    case 6:
-        $file = "{$object_name}_LAST2COMMIT_{$time}_$last_hash.tar.gz";
-        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~2')->run();
-        if ($rs !== null) {
-            Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
-        exit(0);
-    case 4:
-        $file = "{$object_name}_NOT_COMMIT_{$time}_$last_hash.tar.gz";
-        $rs = $git->output($file)->newCommit('NOW')->run();
-        if ($rs !== null) {
-            Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
-        exit(0);
-    case 3:
-        Func::logInfo('Please enter new commit id:', false);
-        $new = trim(fgets(STDIN));
-        $_new = strtoupper($new);
-        Func::logInfo('Please enter old commit id:', false);
-        $old = trim(fgets(STDIN));
-        $_old = strtoupper($old);
-        $file = "{$object_name}_2COMMIT_{$time}_{$_new}_$_old.tar.gz";
-        $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
-        if ($rs !== null) {
-            Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
-        exit(0);
-    case 7:
-        Func::logInfo('Please enter the commit id:', false);
-        $new = trim(fgets(STDIN));
-        $_new = strtoupper($new);
-        $file = "{$object_name}_ONE_COMMIT_{$time}_$_new.tar.gz";
-        $rs = $git->output($file)->newCommit($new)->oldCommit($new . '~')->run();
-        if ($rs !== null) {
-            Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
-        exit(0);
-    case 8:
-        Func::logInfo('Please enter the branch name(default:current branch):', false);
-        $branch = trim(fgets(STDIN));
-        $rs = $git->branchCommitId($branch);
-        if (empty($rs)) {
-            Func::logError('Not found any commit');
+        } else {
+            Func::logError('command exec failed: ' . $git->cmd);
             exit(1);
         }
-        $new = $rs[0];
-        $_new = strtoupper($new);
-        $old = $rs[1];
-        $_old = strtoupper($old);
-        $file = "{$object_name}_BRANCH_{$time}_{$_new}_$_old.tar.gz";
-        $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
-        if ($rs !== null) {
-            Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
-        exit(0);
-    case 9:
-        $file = "./dist/{$object_name}_PATH_$time.tar.gz";
-        packPath($file);
-        exit(0);
-    case 1:
-    case '':
-        break;
-    default:
-        Func::logError('Your input is incorrect, please re-enter');
-        goto choice;
-}
-
-$ini = new Ini($version_file);
-
-if ($ini->get('version')) {
-    $arr = explode('.', $ini->get('version'));
-    $vv = "$arr[0].$arr[1].";
-} else {
-    $vv = 'V1.0.';
-}
-
-// 注意: 如需更改大版本 如: V1.0 -> V2.1 需手动更改./dist/version.ini中version字段大版本
-$version = [
-    'author' => 'DM',
-    'version' => $vv . $time . '.' . strtoupper($git->hashShort()),
-    'git_branch_name' => $git->branchName(),
-    'git_version_hash_short' => $git->hashShort(),
-    'git_version_hash_long' => $git->hashLong(),
-    'update_time' => date('Y-m-d H:i:s'),
-];
-
-Func::logInfo('Generate version...');
-Func::logInfo("Branch: {$version['git_branch_name']}");
-Func::logInfo("Version: {$version['version']}\r\n");
-
-$ini->setAll($version);
-
-Func::logPrimary('Packing vendor? (It will take a long time for y) (y/n) (default:n): ', false);
-$answer = trim(fgets(STDIN));
-
-Func::logInfo("Begin packing...");
-
-if ($answer == 'y') {
-    $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar")->addFile($version_file)->run();
-    if ($rs !== null) {
-        Func::logInfo($rs);
-    } else {
-        Func::logError('command exec failed: ' . $git->cmd);
+        $new_pack_file = $git->getOutPutFile();
     }
-    $pack_file = $git->getOutPutFile();
-    $zippy = Zippy::load();
-    Func::logInfo("Begin packing vendor...");
-    $archive = $zippy->open($pack_file);
-    $archive->addMembers('vendor');
-    $new_pack_file = $pack_file . '.gz';
-    $zippy->create($new_pack_file, $pack_file);
-    unlink($pack_file);
-    Func::logInfo('Packing vendor finished');
-} else {
-    $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar.gz")->addFile($version_file)->run();
-    if ($rs !== null) {
-        Func::logInfo($rs);
-    } else {
-        Func::logError('command exec failed: ' . $git->cmd);
-        exit(1);
-    }
-    $new_pack_file = $git->getOutPutFile();
+    Func::logInfo("Packing finished");
+    Func::logPrimary('Generated File: ' . $new_pack_file);
 }
 
-Func::logInfo("Packing finished");
+/**
+ * 生成版本信息
+ * @param $version_file
+ * @param $time
+ * @param Git $git
+ * @return array
+ */
+function genVersion($version_file, $time, Git $git): array
+{
+    $ini = new Ini($version_file);
+    if ($ini->get('version')) {
+        $arr = explode('.', $ini->get('version'));
+        $vv = "$arr[0].$arr[1].";
+    } else {
+        $vv = 'V1.0.';
+    }
+    // 注意: 如需更改主次版本 如: V1.0 -> V2.1 需打包前手动更改./dist/version.ini中version字段的主次版本
+    $version = [
+        'author' => $git->username(),
+        'version' => $vv . $time . '.' . strtoupper($git->hashShort()),
+        'git_branch_name' => $git->branchName(),
+        'git_version_hash_short' => $git->hashShort(),
+        'git_version_hash_long' => $git->hashLong(),
+        'update_time' => date('Y-m-d H:i:s'),
+    ];
+    Func::logInfo('Generate version...');
+    Func::logInfo("Branch: {$version['git_branch_name']}");
+    Func::logPrimary("Version: {$version['version']}");
+    if ($ini->setAll($version)) {
+        Func::logInfo("Update version succeed");
+    } else {
+        Func::logWarn("Update version failed!");
+    }
 
-Func::logPrimary('Generated File: ' . $new_pack_file);
+    return $version;
+}
