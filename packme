@@ -131,8 +131,9 @@ $last_hash = strtoupper($git->hashShort());
 // 具体打包操作====================================================================
 switch ($choice) {
     case 2:
+        $progress = new ProgressBar(100, "Packing last commit and current changes...");
         $file = "{$object_name}_LAST2NOW_{$time}_$last_hash.tar.gz";
-        $rs = $git->output($file)->newCommit('NOW')->oldCommit('HEAD~1')->run();
+        $rs = $git->output($file)->newCommit('NOW')->oldCommit('HEAD~1')->setProgressBar($progress)->run();
         if ($rs !== null) {
             Func::logInfo($rs);
             genVersion($version_file, $time, $git);
@@ -140,8 +141,9 @@ switch ($choice) {
         }
         exit(0);
     case 5:
+        $progress = new ProgressBar(100, "Packing last commit...");
         $file = "{$object_name}_LAST1COMMIT_{$time}_$last_hash.tar.gz";
-        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~1')->run();
+        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~1')->setProgressBar($progress)->run();
         if ($rs !== null) {
             if ($rs) Func::logInfo($rs);
             genVersion($version_file, $time, $git);
@@ -149,8 +151,9 @@ switch ($choice) {
         }
         exit(0);
     case 6:
+        $progress = new ProgressBar(100, "Packing last two commits...");
         $file = "{$object_name}_LAST2COMMIT_{$time}_$last_hash.tar.gz";
-        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~2')->run();
+        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~2')->setProgressBar($progress)->run();
         if ($rs !== null) {
             Func::logInfo($rs);
             genVersion($version_file, $time, $git);
@@ -158,8 +161,9 @@ switch ($choice) {
         }
         exit(0);
     case 4:
+        $progress = new ProgressBar(100, "Packing uncommitted changes...");
         $file = "{$object_name}_NOT_COMMIT_{$time}_$last_hash.tar.gz";
-        $rs = $git->output($file)->newCommit('NOW')->run();
+        $rs = $git->output($file)->newCommit('NOW')->setProgressBar($progress)->run();
         if ($rs !== null) {
             Func::logInfo($rs);
             genVersion($version_file, $time, $git);
@@ -173,8 +177,9 @@ switch ($choice) {
         Func::logInfo('Please enter old commit id:', false);
         $old = trim(fgets(STDIN));
         $_old = strtoupper($old);
+        $progress = new ProgressBar(100, "Packing changes between commits...");
         $file = "{$object_name}_2COMMIT_{$time}_{$_new}_$_old.tar.gz";
-        $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
+        $rs = $git->output($file)->newCommit($new)->oldCommit($old)->setProgressBar($progress)->run();
         if ($rs !== null) {
             Func::logInfo($rs);
             genVersion($version_file, $time, $git);
@@ -185,8 +190,9 @@ switch ($choice) {
         Func::logInfo('Please enter the commit id:', false);
         $new = trim(fgets(STDIN));
         $_new = strtoupper($new);
+        $progress = new ProgressBar(100, "Packing specific commit...");
         $file = "{$object_name}_ONE_COMMIT_{$time}_$_new.tar.gz";
-        $rs = $git->output($file)->newCommit($new)->oldCommit($new . '~')->run();
+        $rs = $git->output($file)->newCommit($new)->oldCommit($new . '~')->setProgressBar($progress)->run();
         if ($rs !== null) {
             Func::logInfo($rs);
             genVersion($version_file, $time, $git);
@@ -205,8 +211,9 @@ switch ($choice) {
         $_new = strtoupper($new);
         $old = $rs[1];
         $_old = strtoupper($old);
+        $progress = new ProgressBar(100, "Packing branch changes...");
         $file = "{$object_name}_BRANCH_{$time}_{$_new}_$_old.tar.gz";
-        $rs = $git->output($file)->newCommit($new)->oldCommit($old)->run();
+        $rs = $git->output($file)->newCommit($new)->oldCommit($old)->setProgressBar($progress)->run();
         if ($rs !== null) {
             Func::logInfo($rs);
             genVersion($version_file, $time, $git);
@@ -301,6 +308,14 @@ class Git
     private string $change_file_pro = './dist/changes_pro.txt';
 
     public string $cmd = '';
+
+    private ?ProgressBar $progressBar = null;
+
+    public function setProgressBar(ProgressBar $progressBar): Git
+    {
+        $this->progressBar = $progressBar;
+        return $this;
+    }
 
     /**
      * @param string $output 输出文件名 如: update.tar.gz
@@ -471,6 +486,7 @@ class Git
         if (!$this->cmd) $this->prepare();
         if (is_file($this->change_file)) $this->addFile($this->change_file);
         if (is_file($this->change_file_pro)) $this->addFile($this->change_file_pro);
+
         if (PHP_OS === 'WINNT' && !$this->branch) {
             $ps = $this->execGit('where powershell');
             if ($ps) {
@@ -481,7 +497,17 @@ class Git
                 return '';
             }
         }
+
         if (is_file($this->getOutPutFile())) unlink($this->getOutPutFile());
+
+        // 执行命令并更新进度
+        if ($this->progressBar) {
+            $this->progressBar->setProgress(30);
+            $result = $this->execGit($this->cmd);
+            $this->progressBar->setProgress(100);
+            return $result;
+        }
+
         return $this->execGit($this->cmd);
     }
 
@@ -557,6 +583,91 @@ class Git
             return trim($str);
         }
         return null;
+    }
+}
+
+// 进度条类
+class ProgressBar
+{
+    private $total;
+    private int $current = 0;
+    private float $startTime;
+    private int $lastPercent = 0;
+    private int $lastUpdateTime = 0;
+    private float $updateInterval = 0.1; // 更新间隔(秒)
+    private $message;
+
+    public function __construct($total = 100, $message = '')
+    {
+        $this->total = $total;
+        $this->message = $message;
+        $this->startTime = microtime(true);
+    }
+
+    public function setProgress($current)
+    {
+        $this->current = min($current, $this->total);
+        $this->display();
+    }
+
+    public function setMessage($message)
+    {
+        $this->message = $message;
+        $this->display();
+    }
+
+    private function display()
+    {
+        $now = microtime(true);
+        if ($now - $this->lastUpdateTime < $this->updateInterval) {
+            return;
+        }
+
+        $percent = floor(($this->current / $this->total) * 100);
+        if ($percent == $this->lastPercent) {
+            return;
+        }
+
+        $this->lastPercent = $percent;
+        $this->lastUpdateTime = $now;
+
+        $elapsed = $now - $this->startTime;
+        $rate = $elapsed > 0 ? $this->current / $elapsed : 0;
+
+        $bar = str_repeat('=', floor($percent / 2));
+        $empty = str_repeat(' ', 50 - floor($percent / 2));
+
+        // 清除当前行并移动到行首
+        echo "\r\033[K";
+
+        // 显示进度条
+        echo sprintf("%s\n[%s>%s] %d%% %s",
+            $this->message,
+            $bar,
+            $empty,
+            $percent,
+            $this->formatSize($rate) . '/s'
+        );
+
+        // 移动光标到上一行
+        echo "\033[1A";
+
+        // 刷新输出
+        flush();
+
+        if ($this->current >= $this->total) {
+            echo "\n\n";
+        }
+    }
+
+    private function formatSize($bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $bytes = max($bytes, 0);
+        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+        $pow = min($pow, count($units) - 1);
+        $bytes /= pow(1024, $pow);
+        return round($bytes, 2) . ' ' . $units[$pow];
     }
 }
 
@@ -663,25 +774,43 @@ function fullPack(Git $git, $object_name, $version, $version_file)
     Func::logPrimary('Packing vendor? (It will take a long time for y) (y/n) (default:n): ', false);
     $answer = trim(fgets(STDIN));
     Func::logInfo("Begin packing...");
+
     if ($answer == 'y') {
-        $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar")->addFile($version_file)->run();
+        $progress = new ProgressBar(100, "Packing main files...");
+
+        // 打包主要文件
+        $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar")->addFile($version_file)->setProgressBar($progress)->run();
         if ($rs !== null) {
+            $progress->setProgress(40);
             Func::logInfo($rs);
         } else {
             Func::logError('command exec failed: ' . $git->cmd);
+            return;
         }
+
         $pack_file = $git->getOutPutFile();
         $zippy = Zippy::load();
-        Func::logInfo("Begin packing vendor...");
+
+        // 打包 vendor
+        $progress->setMessage("Packing vendor files...");
         $archive = $zippy->open($pack_file);
         $archive->addMembers('vendor');
+        $progress->setProgress(70);
+
+        // 压缩文件
+        $progress->setMessage("Compressing files...");
         $new_pack_file = $pack_file . '.gz';
         $zippy->create($new_pack_file, $pack_file);
         unlink($pack_file);
-        Func::logInfo('Packing vendor finished');
+        $progress->setProgress(100);
+
+        Func::logInfo("Packing vendor finished");
     } else {
-        $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar.gz")->addFile($version_file)->run();
+        $progress = new ProgressBar(100, "Packing files...");
+
+        $rs = $git->branch($git->branchName())->output("$object_name.{$version['version']}.tar.gz")->addFile($version_file)->setProgressBar($progress)->run();
         if ($rs !== null) {
+            $progress->setProgress(100);
             Func::logInfo($rs);
         } else {
             Func::logError('command exec failed: ' . $git->cmd);
@@ -689,6 +818,7 @@ function fullPack(Git $git, $object_name, $version, $version_file)
         }
         $new_pack_file = $git->getOutPutFile();
     }
+
     Func::logInfo("Packing finished");
     Func::logPrimary('Generated File: ' . $new_pack_file);
 }
