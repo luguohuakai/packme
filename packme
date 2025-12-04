@@ -171,10 +171,10 @@ switch ($choice) {
         }
         exit(0);
     case 3:
-        Func::logInfo('Please enter new commit id:', false);
+        Func::logInfo('Please enter new commit id(<=):', false);
         $new = trim(fgets(STDIN));
         $_new = strtoupper($new);
-        Func::logInfo('Please enter old commit id:', false);
+        Func::logInfo('Please enter old commit id(>):', false);
         $old = trim(fgets(STDIN));
         $_old = strtoupper($old);
         $progress = new ProgressBar(100, "Packing changes between commits...");
@@ -226,7 +226,7 @@ switch ($choice) {
         exit(0);
     case 1:
         $version = genVersion($version_file, $time, $git);
-        fullPack($git,$object_name,$version,$version_file);
+        fullPack($git, $object_name, $version, $version_file);
         break;
     default:
         Func::logError('Your input is incorrect, please re-enter');
@@ -426,7 +426,80 @@ class Git
         }
         $diff = trim($diff);
 
-        $this->cmd .= "$($diff)";
+        // 先获取变更文件列表，避免直接在命令中使用 $() 导致中文路径编码问题
+        $output = [];
+        $return_code = 0;
+        // 设置环境变量确保正确处理中文路径
+        // 注意：这需要系统支持 UTF-8 locale，如果系统不支持，可能需要用户配置 Git
+        // 参考 README.md 中的说明：git config --global core.quotepath false
+        $old_lc_all = getenv('LC_ALL');
+        $old_lang = getenv('LANG');
+        putenv('LC_ALL=en_US.UTF-8');
+        putenv('LANG=en_US.UTF-8');
+        exec("$diff 2>&1", $output, $return_code);
+        // 恢复原始环境变量
+        if ($old_lc_all !== false) {
+            putenv('LC_ALL=' . $old_lc_all);
+        } else {
+            putenv('LC_ALL');
+        }
+        if ($old_lang !== false) {
+            putenv('LANG=' . $old_lang);
+        } else {
+            putenv('LANG');
+        }
+
+        if ($return_code !== 0 || empty($output)) {
+            // 如果没有变更文件，不添加任何路径
+            return;
+        }
+
+        // 处理文件列表：过滤已删除的文件，并验证文件是否存在
+        $files = [];
+        foreach ($output as $file) {
+            $file = trim($file);
+            if (empty($file)) continue;
+
+            // 去除路径两端的引号（git diff 可能输出带引号的路径）
+            $file = trim($file, '"\'');
+
+            // 处理转义的八进制编码路径（如 \345\223\210\345\260\224 等）
+            // 如果设置了 UTF-8 环境变量，git 会直接输出正确的中文路径
+            // 如果没有设置，git 会输出转义的八进制编码，需要解码
+            // 使用 preg_replace_callback 解码八进制转义序列
+            // 如果路径不包含转义序列，则保持不变
+            $decodedFile = preg_replace_callback('/\\\\([0-7]{3})/', function ($matches) {
+                return chr(octdec($matches[1]));
+            }, $file);
+
+            // 检查文件是否存在于指定的 commit 中
+            if ($this->new_commit === 'NOW') {
+                // 对于 NOW，检查工作区文件是否存在
+                if (file_exists($decodedFile)) {
+                    $files[] = $decodedFile;
+                }
+            } else {
+                // 对于特定 commit，检查文件是否存在于该 commit 中
+                // git cat-file -e 的语法是 commit:path，需要将整个参数转义
+                $commit_path = $this->new_commit . ':' . $decodedFile;
+                $check_cmd = 'git cat-file -e ' . escapeshellarg($commit_path) . ' 2>/dev/null';
+                exec($check_cmd, $check_output, $check_code);
+                if ($check_code === 0) {
+                    $files[] = $decodedFile;
+                }
+            }
+        }
+
+        // 如果没有有效文件，不添加任何路径
+        if (empty($files)) {
+            return;
+        }
+
+        // 将文件列表追加到命令中，每个文件路径单独添加
+        // 使用 escapeshellarg() 函数安全地转义路径，避免特殊字符和中文编码问题
+        foreach ($files as $file) {
+            $this->cmd .= ' ' . escapeshellarg($file);
+        }
 
         $packme_ini = new Ini('./packme.ini');
         if (!($packme_ini->get('generate_change_txt') === '0')) {
@@ -642,11 +715,11 @@ class ProgressBar
 
         // 显示进度条
         echo sprintf("%s\n[%s>%s] %d%% %s",
-            $this->message,
-            $bar,
-            $empty,
-            $percent,
-            $this->formatSize($rate) . '/s'
+                $this->message,
+                $bar,
+                $empty,
+                $percent,
+                $this->formatSize($rate) . '/s'
         );
 
         // 移动光标到上一行
@@ -745,9 +818,9 @@ function getRelativeFilePathsInSpecifyDirectory($dir): array
 
     // 遍历test目录及其子目录
     $objects = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator($testDir, FilesystemIterator::SKIP_DOTS),
-        RecursiveIteratorIterator::SELF_FIRST,
-        RecursiveIteratorIterator::CATCH_GET_CHILD // Ignore "Permission denied"
+            new RecursiveDirectoryIterator($testDir, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST,
+            RecursiveIteratorIterator::CATCH_GET_CHILD // Ignore "Permission denied"
     );
 
     foreach ($objects as $name => $object) {
@@ -841,12 +914,12 @@ function genVersion($version_file, $time, Git $git): array
     }
     // 注意: 如需更改主次版本 如: V1.0 -> V2.1 需打包前手动更改./dist/version.ini中version字段的主次版本
     $version = [
-        'author' => $git->username(),
-        'version' => $vv . $time . '.' . strtoupper($git->hashShort()),
-        'git_branch_name' => $git->branchName(),
-        'git_version_hash_short' => $git->hashShort(),
-        'git_version_hash_long' => $git->hashLong(),
-        'update_time' => date('Y-m-d H:i:s'),
+            'author' => $git->username(),
+            'version' => $vv . $time . '.' . strtoupper($git->hashShort()),
+            'git_branch_name' => $git->branchName(),
+            'git_version_hash_short' => $git->hashShort(),
+            'git_version_hash_long' => $git->hashLong(),
+            'update_time' => date('Y-m-d H:i:s'),
     ];
     Func::logInfo('Generate version...');
     Func::logInfo("Branch: {$version['git_branch_name']}");
