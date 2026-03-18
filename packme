@@ -308,6 +308,7 @@ class Git
     private string $change_file_pro = './dist/changes_pro.txt';
 
     public string $cmd = '';
+    private ?string $prepare_error = null;
 
     private ?ProgressBar $progressBar = null;
 
@@ -449,8 +450,13 @@ class Git
             putenv('LANG');
         }
 
-        if ($return_code !== 0 || empty($output)) {
-            // 如果没有变更文件，不添加任何路径
+        if ($return_code !== 0) {
+            $this->prepare_error = 'Failed to get changed files';
+            return;
+        }
+
+        if (empty($output)) {
+            $this->prepare_error = 'No changed files found, packaging stopped';
             return;
         }
 
@@ -482,7 +488,7 @@ class Git
                 // 对于特定 commit，检查文件是否存在于该 commit 中
                 // git cat-file -e 的语法是 commit:path，需要将整个参数转义
                 $commit_path = $this->new_commit . ':' . $decodedFile;
-                $check_cmd = 'git cat-file -e ' . escapeshellarg($commit_path) . ' 2>/dev/null';
+                $check_cmd = 'git cat-file -e ' . escapeshellarg($commit_path) . ' 2>' . $this->nullDevice();
                 exec($check_cmd, $check_output, $check_code);
                 if ($check_code === 0) {
                     $files[] = $decodedFile;
@@ -492,6 +498,7 @@ class Git
 
         // 如果没有有效文件，不添加任何路径
         if (empty($files)) {
+            $this->prepare_error = 'No valid changed files found, packaging stopped';
             return;
         }
 
@@ -557,6 +564,10 @@ class Git
     public function run(): ?string
     {
         if (!$this->cmd) $this->prepare();
+        if ($this->prepare_error !== null) {
+            Func::logError($this->prepare_error);
+            return null;
+        }
         if (is_file($this->change_file)) $this->addFile($this->change_file);
         if (is_file($this->change_file_pro)) $this->addFile($this->change_file_pro);
 
@@ -656,6 +667,11 @@ class Git
             return trim($str);
         }
         return null;
+    }
+
+    private function nullDevice(): string
+    {
+        return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN' ? 'nul' : '/dev/null';
     }
 }
 
