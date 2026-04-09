@@ -787,12 +787,9 @@ function packPath(string $file)
         $zippy = Zippy::load();
         $tar_file = str_replace('.gz', '', $file);
         $tar = $zippy->create($tar_file);
-        $tar->addMembers([$path]);
-        $dir = '';
-        if (is_dir($path)) {
-            $dirArr = explode('/', $path);
-            $dir = $dirArr[count($dirArr) - 1] . '/';
-        }
+        $archivePath = getArchiveMemberPath($path);
+        $tar->addMembers($archivePath === '' ? [$path] : [$archivePath => $path]);
+        $dir = getArchiveDirectoryPrefix($path);
 
         // 指定项目根路径
         global $replaceme_ini;
@@ -807,7 +804,7 @@ function packPath(string $file)
         if (is_file('replaceme5')) $tar->addMembers([$dir . 'replaceme5' => 'replaceme5']);
         if (is_file($r5)) $tar->addMembers([$dir . 'replaceme5' => $r5]);
         if (is_file('dist/changes.txt')) {
-            $filePath = getRelativeFilePathsInSpecifyDirectory($dir);
+            $filePath = getRelativeFilePathsInSpecifyDirectory($path);
             if ($filePath) {
                 $content = "\nChange Files\n";
                 $content .= implode("\n", $filePath);
@@ -815,8 +812,10 @@ function packPath(string $file)
             }
             $tar->addMembers([$dir . 'changes.txt' => 'dist/changes.txt']);
         }
-
-        $zippy->create($file, $tar_file);
+        if (!gzipFile($tar_file, $file)) {
+            Func::logError("Compress tar failed: $tar_file");
+            return;
+        }
         unlink($tar_file);
 
         Func::logPrimary('Generated File: ' . $file);
@@ -824,34 +823,105 @@ function packPath(string $file)
 }
 
 /**
- * 写一个获取指定目录的结构并返回数组的方法
- * @param $dir
+ * 获取打包路径在压缩包中的目标路径
+ * @param string $path
+ * @return string
+ */
+function getArchiveMemberPath(string $path): string
+{
+    $normalizedPath = str_replace('\\', '/', trim($path));
+    $normalizedPath = rtrim($normalizedPath, '/');
+    $normalizedPath = preg_replace('#^(?:\./)+#', '', $normalizedPath);
+    return trim($normalizedPath, '/');
+}
+
+/**
+ * 获取打包目录在压缩包中的前缀
+ * @param string $path
+ * @return string
+ */
+function getArchiveDirectoryPrefix(string $path): string
+{
+    $archivePath = getArchiveMemberPath($path);
+    if ($archivePath === '' || $archivePath === '.') return '';
+
+    $prefix = is_file($path) ? dirname($archivePath) : $archivePath;
+    if ($prefix === '' || $prefix === '.') return '';
+
+    return $prefix . '/';
+}
+
+/**
+ * 写一个获取指定目录结构并返回数组的方法
+ * @param string $path
  * @return array
  */
-function getRelativeFilePathsInSpecifyDirectory($dir): array
+function getRelativeFilePathsInSpecifyDirectory(string $path): array
 {
-    // 获取test目录的绝对路径
-    $testDir = realpath('.' . DIRECTORY_SEPARATOR . $dir);
+    $targetPath = realpath($path);
+    if ($targetPath === false) return [];
+
+    if (is_file($targetPath)) {
+        return [basename($targetPath)];
+    }
 
     // 初始化存储相对路径的数组
     $relativePaths = [];
 
-    // 遍历test目录及其子目录
+    // 遍历指定目录及其子目录
     $objects = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($testDir, FilesystemIterator::SKIP_DOTS),
+            new RecursiveDirectoryIterator($targetPath, FilesystemIterator::SKIP_DOTS),
             RecursiveIteratorIterator::SELF_FIRST,
             RecursiveIteratorIterator::CATCH_GET_CHILD // Ignore "Permission denied"
     );
 
     foreach ($objects as $name => $object) {
         if ($object->isFile()) {
-            // 计算相对于$baseDir的相对路径
-            $relativePath = substr($name, strlen($testDir) + 1);
+            // 计算相对于指定目录的相对路径
+            $relativePath = substr($name, strlen($targetPath) + 1);
             $relativePaths[] = $relativePath;
         }
     }
 
     return $relativePaths;
+}
+
+/**
+ * 流式压缩 tar 文件为 tar.gz，避免把整个归档读入内存
+ * @param string $source
+ * @param string $destination
+ * @return bool
+ */
+function gzipFile(string $source, string $destination): bool
+{
+    $in = fopen($source, 'rb');
+    if ($in === false) return false;
+
+    $out = gzopen($destination, 'wb9');
+    if ($out === false) {
+        fclose($in);
+        return false;
+    }
+
+    while (!feof($in)) {
+        $chunk = fread($in, 1024 * 1024);
+        if ($chunk === false) {
+            fclose($in);
+            gzclose($out);
+            @unlink($destination);
+            return false;
+        }
+        if (gzwrite($out, $chunk) === false) {
+            fclose($in);
+            gzclose($out);
+            @unlink($destination);
+            return false;
+        }
+    }
+
+    fclose($in);
+    gzclose($out);
+    return true;
 }
 
 /**
@@ -893,7 +963,10 @@ function fullPack(Git $git, $object_name, $version, $version_file)
         // 压缩文件
         $progress->setMessage("Compressing files...");
         $new_pack_file = $pack_file . '.gz';
-        $zippy->create($new_pack_file, $pack_file);
+        if (!gzipFile($pack_file, $new_pack_file)) {
+            Func::logError("Compress tar failed: $pack_file");
+            return;
+        }
         unlink($pack_file);
         $progress->setProgress(100);
 
