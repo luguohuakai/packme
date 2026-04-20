@@ -22,6 +22,9 @@
       "homepage": "https://github.com/luguohuakai/packme.git"
     }
   ],
+  "scripts": {
+    "test": "@php tests/integration.php"
+  },
   "bin": [
     "packme"
   ]

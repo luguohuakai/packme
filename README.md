@@ -57,6 +57,12 @@ Please select packaging method:
 * 支持在`./dist/`目录下编写`changes.txt`说明文档, `changes.txt`会被自动打包, 打包时会自动向文档追加提交信息和变更的文件路径
 * `./dist/changes.txt`如果没有, 需要自行创建
 
+## 测试
+
+* 在项目根目录执行: `composer test`
+* 当前集成测试会真实创建临时 Git 项目并执行 `packme` / `replaceme` 主流程
+* 依赖本机已安装: `composer` `git` `tar` `gzip` `php`
+
 ## 更新迭代计划
 
 packme: 打包模式 9 需支持打包绝对路径: 如: D:\PhpstormProjects\path\to\project 或者 /Users/xx/path/to/project
@@ -132,4 +138,3 @@ php ./replaceme
 
 * 只能回滚当前安装包内的文件
 * 回滚命令: `php ./replaceme --rollback`
-
