@@ -345,7 +345,9 @@ class Git
      */
     public function addFile(string $add_file): Git
     {
-        $this->add_file = array_merge($this->add_file, [$add_file]);
+        if (!in_array($add_file, $this->add_file, true)) {
+            $this->add_file[] = $add_file;
+        }
         return $this;
     }
 
@@ -486,7 +488,9 @@ class Git
             if ($this->new_commit === 'NOW') {
                 // 对于 NOW，检查工作区文件是否存在
                 if (file_exists($decodedFile)) {
-                    $files[] = $decodedFile;
+                    if (!$this->isAddedArchiveFile($decodedFile)) {
+                        $files[] = $decodedFile;
+                    }
                 }
             } else {
                 // 对于特定 commit，检查文件是否存在于该 commit 中
@@ -494,7 +498,7 @@ class Git
                 $commit_path = $this->new_commit . ':' . $decodedFile;
                 $check_cmd = 'git cat-file -e ' . escapeshellarg($commit_path) . ' 2>' . $this->nullDevice();
                 exec($check_cmd, $check_output, $check_code);
-                if ($check_code === 0) {
+                if ($check_code === 0 && !$this->isAddedArchiveFile($decodedFile)) {
                     $files[] = $decodedFile;
                 }
             }
@@ -528,6 +532,32 @@ class Git
 
         // 生成和压缩包同名的说明文件用以解释压缩包, 而不用打开压缩包查看changes.txt
         copy($this->change_file, $this->change_file_pro);
+    }
+
+    /**
+     * git archive --add-file 会把文件放到压缩包根目录，避免差异文件里再次加入同名根文件。
+     * @param string $file
+     * @return bool
+     */
+    private function isAddedArchiveFile(string $file): bool
+    {
+        $normalizedFile = $this->normalizePath($file);
+        if (strpos($normalizedFile, '/') !== false) return false;
+
+        foreach ($this->add_file as $addFile) {
+            if (basename($this->normalizePath($addFile)) === $normalizedFile) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizePath(string $file): string
+    {
+        $file = str_replace('\\', '/', trim($file));
+        $file = preg_replace('#^(?:\./)+#', '', $file);
+        return trim($file, '/');
     }
 
     /**

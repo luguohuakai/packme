@@ -37,8 +37,10 @@ if ($argc === 2 && Func::hasPrefix($argv[1], '--backup=')) {
 }
 
 // 非回滚操作则配置备份后缀
-$replaceme_ini->set('backup_suffix', $backup);
-$replaceme_ini->set('install_time', date('Y-m-d H:i:s'));
+if (!$replaceme_ini->set('backup_suffix', $backup) || !$replaceme_ini->set('install_time', date('Y-m-d H:i:s'))) {
+    Func::logError('写入replaceme.ini失败, 请检查当前目录和replaceme.ini权限');
+    exit(1);
+}
 
 /**
  * 读取配置文件

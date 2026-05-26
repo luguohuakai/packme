@@ -59,6 +59,12 @@ final class IntegrationSuite
             'replaceme install and rollback keep backup suffix and restore files' => function (): void {
                 $this->testReplacemeInstallAndRollback();
             },
+            'last commit pack keeps a single runtime replaceme.ini' => function (): void {
+                $this->testLastCommitPackKeepsSingleRuntimeConfig();
+            },
+            'replaceme stops when backup suffix cannot be persisted' => function (): void {
+                $this->testReplacemeStopsWhenConfigIsNotWritable();
+            },
         ];
 
         foreach ($tests as $name => $test) {
@@ -173,6 +179,63 @@ final class IntegrationSuite
         $this->assertTrue(!is_file($targetDir . '/newdir/created.php'), 'rollback should remove newly created files');
     }
 
+    private function testLastCommitPackKeepsSingleRuntimeConfig(): void
+    {
+        $projectDir = $this->createComposerProject('packme-test-last-commit');
+        $this->writeFile($projectDir . '/app/index.php', "<?php echo 'old';\n");
+        $this->initGitRepository($projectDir, ['composer.json', 'composer.lock', 'app']);
+
+        $this->writeFile($projectDir . '/app/index.php', "<?php echo 'new';\n");
+        $this->writeFile($projectDir . '/replaceme.ini', 'object_root=/tmp/packme-target/' . PHP_EOL);
+        $this->assertSame(0, $this->runCommand('git add app/index.php replaceme.ini', $projectDir)->exitCode, 'git add second commit files should succeed');
+        $commit = $this->runCommand("git commit -qm 'change app and config'", $projectDir);
+        $this->assertSame(0, $commit->exitCode, 'git second commit should succeed: ' . $commit->combinedOutput());
+
+        $this->writeFile(
+            $projectDir . '/replaceme.ini',
+            'object_root=/tmp/packme-target/' . PHP_EOL . 'backup_suffix=WORKTREE' . PHP_EOL
+        );
+
+        $run = $this->runCommand('php vendor/bin/packme', $projectDir, "5\n");
+        $this->assertSame(0, $run->exitCode, 'last commit pack should succeed: ' . $run->combinedOutput());
+
+        $archives = glob($projectDir . '/dist/*_LAST1COMMIT_*.tar.gz');
+        $this->assertTrue(!empty($archives), 'last commit packaging should create a tar.gz archive');
+        $archive = $archives[0];
+
+        $list = $this->runCommand('tar -tzf ' . escapeshellarg($archive), $projectDir);
+        $this->assertSame(0, $list->exitCode, 'archive should be readable by tar -tzf');
+        $this->assertSame(1, substr_count($list->stdout, "replaceme.ini\n"), 'archive should contain one top-level replaceme.ini');
+
+        $replacemeIni = $this->extractTarEntry($archive, 'replaceme.ini', $projectDir);
+        $this->assertContains('backup_suffix=WORKTREE', $replacemeIni, 'runtime replaceme.ini should come from working tree add-file');
+    }
+
+    private function testReplacemeStopsWhenConfigIsNotWritable(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            fwrite(STDOUT, '[SKIP] replaceme config permission check is skipped for root user' . PHP_EOL);
+            return;
+        }
+
+        $packageDir = $this->createTempDir('replaceme-readonly-package-');
+        $targetDir = $this->createTempDir('replaceme-readonly-target-');
+
+        $this->writeFile($packageDir . '/replaceme', file_get_contents($this->repoRoot . '/replaceme'));
+        chmod($packageDir . '/replaceme', 0755);
+        $this->writeFile($packageDir . '/replaceme.ini', 'object_root=' . $targetDir . '/' . PHP_EOL);
+        $this->writeFile($packageDir . '/module/demo.php', "<?php echo 'new';\n");
+        $this->writeFile($targetDir . '/module/demo.php', "<?php echo 'old';\n");
+        chmod($packageDir . '/replaceme.ini', 0444);
+
+        $install = $this->runCommand('php ./replaceme', $packageDir, $targetDir . "\n");
+        chmod($packageDir . '/replaceme.ini', 0644);
+
+        $this->assertTrue($install->exitCode !== 0, 'replaceme should fail when backup_suffix cannot be written');
+        $this->assertContains('写入replaceme.ini失败', $install->combinedOutput(), 'replaceme should report config write failure');
+        $this->assertSame("<?php echo 'old';\n", file_get_contents($targetDir . '/module/demo.php'), 'target file should not be replaced when config write fails');
+    }
+
     private function createComposerProject(string $prefix): string
     {
         $projectDir = $this->createTempDir($prefix . '-');
@@ -197,7 +260,7 @@ final class IntegrationSuite
             json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL
         );
 
-        $install = $this->runCommand('composer install --no-interaction', $projectDir);
+        $install = $this->runCommand('composer install --no-interaction --ignore-platform-req=ext-redis', $projectDir);
         $this->assertSame(0, $install->exitCode, 'composer install should succeed: ' . $install->combinedOutput());
 
         return $projectDir;
