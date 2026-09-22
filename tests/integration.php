@@ -35,6 +35,7 @@ final class IntegrationSuite
     private string $repoRoot;
     private array $tmpDirs = [];
     private int $passed = 0;
+    private ?string $composerTemplate = null;
 
     public function __construct(string $repoRoot)
     {
@@ -64,6 +65,27 @@ final class IntegrationSuite
             },
             'replaceme stops when backup suffix cannot be persisted' => function (): void {
                 $this->testReplacemeStopsWhenConfigIsNotWritable();
+            },
+            'uncommitted pack uses working tree content and includes newly added files' => function (): void {
+                $this->testUncommittedPackPackagesWorktreeChanges();
+            },
+            'specified path accepts absolute path and normalizes archive members' => function (): void {
+                $this->testSpecifiedPathAcceptsAbsolutePath();
+            },
+            'generate_change_txt=0 disables changes.txt' => function (): void {
+                $this->testGenerateChangeTxtCanBeDisabled();
+            },
+            'replaceme ignore_dir_prefix only strips the leading prefix' => function (): void {
+                $this->testReplacemeIgnoreDirPrefixOnlyStripsLeadingPrefix();
+            },
+            'two-commit mode accepts default commits' => function (): void {
+                $this->testTwoCommitModeAcceptsDefaultCommits();
+            },
+            'invalid commit id stops packaging with non-zero exit code' => function (): void {
+                $this->testInvalidCommitIdStopsPackaging();
+            },
+            'object_path_map from packme.ini overrides the built-in mapping' => function (): void {
+                $this->testObjectPathMapFromIni();
             },
         ];
 
@@ -133,7 +155,7 @@ final class IntegrationSuite
 
         $list = $this->runCommand('tar -tzf ' . escapeshellarg($archive), $projectDir);
         $this->assertSame(0, $list->exitCode, 'full archive should be readable by tar -tzf');
-        $this->assertContains("vendor/\n", $list->stdout, 'vendor directory should be included when choosing vendor=y');
+        $this->assertTrue(strpos($list->stdout, 'vendor/') !== false, 'vendor directory should be included when choosing vendor=y');
         $this->assertContains('vendor/autoload.php', $list->stdout, 'vendor files should be present');
         $this->assertContains("replaceme.ini\n", $list->stdout, 'replaceme.ini should be packed at archive root');
         $this->assertContains("version.ini\n", $list->stdout, 'version.ini should be packed at archive root');
@@ -206,6 +228,8 @@ final class IntegrationSuite
         $list = $this->runCommand('tar -tzf ' . escapeshellarg($archive), $projectDir);
         $this->assertSame(0, $list->exitCode, 'archive should be readable by tar -tzf');
         $this->assertSame(1, substr_count($list->stdout, "replaceme.ini\n"), 'archive should contain one top-level replaceme.ini');
+        $this->assertContains("changes.txt\n", $list->stdout, 'archive should contain changes.txt at root');
+        $this->assertContains("version.ini\n", $list->stdout, 'archive should contain version.ini at root');
 
         $replacemeIni = $this->extractTarEntry($archive, 'replaceme.ini', $projectDir);
         $this->assertContains('backup_suffix=WORKTREE', $replacemeIni, 'runtime replaceme.ini should come from working tree add-file');
@@ -236,11 +260,194 @@ final class IntegrationSuite
         $this->assertSame("<?php echo 'old';\n", file_get_contents($targetDir . '/module/demo.php'), 'target file should not be replaced when config write fails');
     }
 
+    private function testUncommittedPackPackagesWorktreeChanges(): void
+    {
+        $projectDir = $this->createComposerProject('packme-test-uncommitted');
+        $this->writeFile($projectDir . '/app/index.php', "<?php echo 'head';\n");
+        $this->initGitRepository($projectDir, ['composer.json', 'composer.lock', 'app']);
+
+        // 1) 没有变更时直接停止，不会退化成全量打包
+        $noChange = $this->runCommand('php vendor/bin/packme', $projectDir, "4\n");
+        $this->assertSame(1, $noChange->exitCode, 'uncommitted pack should exit non-zero when there is no change');
+        $this->assertContains('No changed files found, packaging stopped', $noChange->combinedOutput(), 'uncommitted pack should stop when there is no change');
+        $this->assertTrue(empty(glob($projectDir . '/dist/*_NOT_COMMIT_*.tar.gz')), 'no archive should be created when there is no change');
+
+        // 2) 已修改文件应打包工作区内容
+        $this->writeFile($projectDir . '/app/index.php', "<?php echo 'worktree';\n");
+        // 3) 新增(已 git add)的嵌套文件应保留完整相对路径
+        $this->writeFile($projectDir . '/app/sub/new.php', "<?php echo 'new';\n");
+        $this->assertSame(0, $this->runCommand('git add app/sub/new.php', $projectDir)->exitCode, 'git add newly added file should succeed');
+        // 4) 未跟踪文件只提示、不打包
+        $this->writeFile($projectDir . '/app/untracked.php', "<?php echo 'untracked';\n");
+
+        $run = $this->runCommand('php vendor/bin/packme', $projectDir, "4\n");
+        $this->assertSame(0, $run->exitCode, 'uncommitted pack should succeed: ' . $run->combinedOutput());
+        $this->assertContains('以下未跟踪文件不会被包含', $run->combinedOutput(), 'untracked files should be reported');
+        $this->assertContains('app/untracked.php', $run->combinedOutput(), 'untracked file should be listed in warning');
+
+        $archive = $this->findSingleArchive($projectDir, '*_NOT_COMMIT_*.tar.gz');
+        $list = $this->runCommand('tar -tzf ' . escapeshellarg($archive), $projectDir);
+        $this->assertSame(0, $list->exitCode, 'archive should be readable by tar -tzf: ' . $list->combinedOutput());
+
+        $this->assertContains("app/index.php\n", $list->stdout, 'modified file should be packaged');
+        $this->assertContains("app/sub/new.php\n", $list->stdout, 'newly added file should keep its full relative path');
+        $this->assertNotContains("app/untracked.php\n", $list->stdout, 'untracked file should not be packaged');
+        $this->assertContains("changes.txt\n", $list->stdout, 'changes.txt should be packaged at archive root');
+        $this->assertContains(basename($archive) . ".txt\n", $list->stdout, 'same-name description file should be packaged');
+
+        $this->assertSame(
+            "<?php echo 'worktree';\n",
+            $this->extractTarEntry($archive, 'app/index.php', $projectDir),
+            'uncommitted pack should use working tree content instead of HEAD content'
+        );
+        $this->assertSame(
+            "<?php echo 'new';\n",
+            $this->extractTarEntry($archive, 'app/sub/new.php', $projectDir),
+            'newly added file content should be packaged'
+        );
+    }
+
+    private function testSpecifiedPathAcceptsAbsolutePath(): void
+    {
+        $projectDir = $this->createComposerProject('packme-test-abspath');
+        $this->writeFile($projectDir . '/common/config/a.php', "<?php return ['ok' => true];\n");
+        $this->writeFile($projectDir . '/dist/changes.txt', "manual note\n");
+        $this->initGitRepository($projectDir, ['composer.json', 'composer.lock', 'common', 'dist']);
+
+        $absolutePath = $projectDir . '/common/config';
+        $run = $this->runCommand('php vendor/bin/packme', $projectDir, "9\n" . $absolutePath . "\n");
+        $this->assertSame(0, $run->exitCode, 'packing an absolute path should succeed: ' . $run->combinedOutput());
+
+        $archive = $this->findSingleArchive($projectDir, '*_PATH_*.tar.gz');
+        $list = $this->runCommand('tar -tzf ' . escapeshellarg($archive), $projectDir);
+        $this->assertSame(0, $list->exitCode, 'archive should be readable by tar -tzf: ' . $list->combinedOutput());
+
+        foreach (explode("\n", trim($list->stdout)) as $member) {
+            if ($member === '') continue;
+            $this->assertTrue($member[0] !== '/', "archive member should not start with '/': {$member}");
+            $this->assertTrue(strpos($member, ':') === false, "archive member should not contain ':': {$member}");
+        }
+
+        $normalized = trim(str_replace('\\', '/', $absolutePath), '/');
+        $this->assertContains($normalized . '/a.php', $list->stdout, 'absolute path should be normalized to a relative archive member');
+    }
+
+    private function testGenerateChangeTxtCanBeDisabled(): void
+    {
+        $projectDir = $this->createComposerProject('packme-test-nochangefile');
+        $this->writeFile($projectDir . '/app/index.php', "<?php echo 'head';\n");
+        $this->writeFile($projectDir . '/packme.ini', 'generate_change_txt = 0' . PHP_EOL);
+        $this->initGitRepository($projectDir, ['composer.json', 'composer.lock', 'app', 'packme.ini']);
+
+        $this->writeFile($projectDir . '/app/index.php', "<?php echo 'changed';\n");
+
+        $run = $this->runCommand('php vendor/bin/packme', $projectDir, "4\n");
+        $this->assertSame(0, $run->exitCode, 'packing with generate_change_txt=0 should succeed: ' . $run->combinedOutput());
+
+        $archive = $this->findSingleArchive($projectDir, '*_NOT_COMMIT_*.tar.gz');
+        $list = $this->runCommand('tar -tzf ' . escapeshellarg($archive), $projectDir);
+        $this->assertSame(0, $list->exitCode, 'archive should be readable by tar -tzf: ' . $list->combinedOutput());
+        $this->assertNotContains("changes.txt\n", $list->stdout, 'changes.txt should not be packaged when generate_change_txt=0');
+        $this->assertTrue(!is_file($projectDir . '/dist/changes.txt'), 'dist/changes.txt should not be generated when generate_change_txt=0');
+    }
+
+    private function testReplacemeIgnoreDirPrefixOnlyStripsLeadingPrefix(): void
+    {
+        $base = $this->createTempDir('replaceme-ignore-prefix-');
+        $packageDir = $base . '/package';
+        // 目标根目录里也包含 ui/，用于验证不会被 str_replace 误伤
+        $targetDir = $base . '/target/ui';
+        if (!mkdir($targetDir, 0777, true) && !is_dir($targetDir)) {
+            throw new TestFailure("failed to create directory: {$targetDir}");
+        }
+
+        $this->writeFile($packageDir . '/replaceme', file_get_contents($this->repoRoot . '/replaceme'));
+        chmod($packageDir . '/replaceme', 0755);
+        $this->writeFile(
+            $packageDir . '/replaceme.ini',
+            'object_root=' . $targetDir . '/' . PHP_EOL . 'ignore_dir_prefix=ui/' . PHP_EOL
+        );
+        $this->writeFile($packageDir . '/ui/assets/img/x.svg', "SVG\n");
+
+        $install = $this->runCommand('php ./replaceme', $packageDir, $targetDir . "\n");
+        $this->assertSame(0, $install->exitCode, 'replaceme install with ignore_dir_prefix should succeed: ' . $install->combinedOutput());
+
+        $this->assertTrue(is_file($targetDir . '/assets/img/x.svg'), 'ignore_dir_prefix should strip only the leading package prefix');
+        $this->assertTrue(!is_file($targetDir . '/ui/assets/img/x.svg'), 'the ignore prefix should not be kept in the target path');
+    }
+
+    private function testTwoCommitModeAcceptsDefaultCommits(): void
+    {
+        $projectDir = $this->createComposerProject('packme-test-2commit');
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'a';\n");
+        $this->initGitRepository($projectDir, ['composer.json', 'composer.lock', 'app']);
+
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'b';\n");
+        $this->assertSame(0, $this->runCommand('git add app/a.php', $projectDir)->exitCode, 'git add should succeed');
+        $this->assertSame(0, $this->runCommand("git commit -qm 'second commit'", $projectDir)->exitCode, 'second commit should succeed');
+
+        // 模式 3 的两次询问都直接回车 => 默认 HEAD 与 HEAD~1
+        $run = $this->runCommand('php vendor/bin/packme', $projectDir, "3\n\n\n");
+        $this->assertSame(0, $run->exitCode, 'mode 3 with default commits should succeed: ' . $run->combinedOutput());
+
+        $archive = $this->findSingleArchive($projectDir, '*_2COMMIT_*.tar.gz');
+        $list = $this->runCommand('tar -tzf ' . escapeshellarg($archive), $projectDir);
+        $this->assertContains("app/a.php\n", $list->stdout, 'mode 3 should package the changed file');
+    }
+
+    private function testInvalidCommitIdStopsPackaging(): void
+    {
+        $projectDir = $this->createComposerProject('packme-test-badcommit');
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'a';\n");
+        $this->initGitRepository($projectDir, ['composer.json', 'composer.lock', 'app']);
+
+        $run = $this->runCommand('php vendor/bin/packme', $projectDir, "7\ndeadbeef\n");
+        $this->assertSame(1, $run->exitCode, 'an invalid commit id should exit non-zero');
+        $this->assertContains('commit id 不存在', $run->combinedOutput(), 'an invalid commit id should be reported');
+        $this->assertTrue(empty(glob($projectDir . '/dist/*_ONE_COMMIT_*.tar.gz')), 'no archive should be created for an invalid commit');
+    }
+
+    private function testObjectPathMapFromIni(): void
+    {
+        $projectDir = $this->createComposerProject('packme-test-pathmap');
+        $projectName = strtoupper(basename($projectDir));
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'a';\n");
+
+        $map = json_encode([$projectName => '/custom/target/'], JSON_UNESCAPED_SLASHES);
+        $this->writeFile($projectDir . '/packme.ini', "object_path_map = '" . $map . "'" . PHP_EOL);
+        $this->initGitRepository($projectDir, ['composer.json', 'composer.lock', 'app', 'packme.ini']);
+
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'b';\n");
+        $run = $this->runCommand('php vendor/bin/packme', $projectDir, "4\n");
+        $this->assertSame(0, $run->exitCode, 'packing with a custom path map should succeed: ' . $run->combinedOutput());
+
+        $archive = $this->findSingleArchive($projectDir, '*_NOT_COMMIT_*.tar.gz');
+        $replacemeIni = $this->extractTarEntry($archive, 'replaceme.ini', $projectDir);
+        $this->assertContains('object_root=/custom/target/', $replacemeIni, 'packme.ini object_path_map should override the built-in mapping');
+    }
+
     private function createComposerProject(string $prefix): string
     {
+        // 每个用例都新建项目, 但 composer install 只做一次, 之后复用模版, 减少网络与耗时
+        if ($this->composerTemplate === null) {
+            $this->composerTemplate = $this->buildComposerTemplate();
+        }
+
         $projectDir = $this->createTempDir($prefix . '-');
+        $copy = $this->runCommand(
+            'cp -R ' . escapeshellarg($this->composerTemplate . '/.') . ' ' . escapeshellarg($projectDir . '/'),
+            $this->repoRoot
+        );
+        $this->assertSame(0, $copy->exitCode, 'copy composer template should succeed: ' . $copy->combinedOutput());
+
+        return $projectDir;
+    }
+
+    private function buildComposerTemplate(): string
+    {
+        $templateDir = $this->createTempDir('packme-composer-template-');
         $composer = [
-            'name' => 'tests/' . $prefix,
+            'name' => 'tests/packme-template',
             'repositories' => [
                 [
                     'type' => 'path',
@@ -256,14 +463,14 @@ final class IntegrationSuite
         ];
 
         $this->writeFile(
-            $projectDir . '/composer.json',
+            $templateDir . '/composer.json',
             json_encode($composer, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL
         );
 
-        $install = $this->runCommand('composer install --no-interaction --ignore-platform-req=ext-redis', $projectDir);
+        $install = $this->runCommand('composer install --no-interaction', $templateDir);
         $this->assertSame(0, $install->exitCode, 'composer install should succeed: ' . $install->combinedOutput());
 
-        return $projectDir;
+        return $templateDir;
     }
 
     private function initGitRepository(string $projectDir, array $pathsToAdd): void
@@ -288,6 +495,16 @@ final class IntegrationSuite
         return $result->stdout;
     }
 
+    private function findSingleArchive(string $projectDir, string $pattern): string
+    {
+        $archives = glob($projectDir . '/dist/' . $pattern);
+        $this->assertTrue(
+            count($archives) === 1,
+            "expected exactly one archive matching {$pattern}, found " . count($archives)
+        );
+        return $archives[0];
+    }
+
     private function runCommand(string $command, string $cwd, string $input = ''): CommandResult
     {
         $descriptorSpec = [
@@ -296,7 +513,7 @@ final class IntegrationSuite
             2 => ['pipe', 'w'],
         ];
 
-        $process = proc_open(['/bin/sh', '-lc', $command], $descriptorSpec, $pipes, $cwd);
+        $process = proc_open(['/bin/sh', '-lc', $command], $descriptorSpec, $pipes, $cwd, $this->commandEnv());
         if (!is_resource($process)) {
             throw new TestFailure("failed to start command: {$command}");
         }
@@ -313,6 +530,18 @@ final class IntegrationSuite
         $exitCode = proc_close($process);
 
         return new CommandResult($command, $exitCode, $stdout === false ? '' : $stdout, $stderr === false ? '' : $stderr);
+    }
+
+    /**
+     * 子进程环境: 关闭 packme 的使用量上报, 避免测试受网络影响
+     * @return array
+     */
+    private function commandEnv(): array
+    {
+        $env = getenv();
+        if (!is_array($env)) $env = [];
+        $env['PACKME_REPORT_USAGE'] = '0';
+        return $env;
     }
 
     private function createTempDir(string $prefix): string

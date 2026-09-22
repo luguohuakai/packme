@@ -1,0 +1,61 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.3']
+    name: Integration PHP ${{ matrix.php }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: phar, zip, mbstring
+          tools: composer
+
+      - name: Show environment
+        run: |
+          php -v
+          git --version
+          composer --version
+
+      - name: Run tests
+        run: composer test
+
+  # 完整集成测试基于 POSIX shell, Windows 只做语法与 CLI 冒烟
+  windows-smoke:
+    runs-on: windows-latest
+    name: Windows smoke
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: phar, zip, mbstring
+          tools: composer
+
+      - name: Lint
+        shell: pwsh
+        run: |
+          php -l packme
+          php -l replaceme
+          php -l replaceme5
+          php -l tests/integration.php
+          php -l tests/unit.php
+
+      - name: CLI smoke
+        shell: pwsh
+        run: |
+          php packme --version
+          php packme --help
+          php replaceme --help
+          php replaceme5 --help

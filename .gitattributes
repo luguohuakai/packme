@@ -1,0 +1,6 @@
+# 让 packme 全量打包与 composer 源码分发包自动排除开发文件
+/tests export-ignore
+/.github export-ignore
+/.idea export-ignore
+/.gitignore export-ignore
+/.gitattributes export-ignore

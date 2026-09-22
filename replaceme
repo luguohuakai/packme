@@ -8,6 +8,24 @@ $backup = date('YmdHis');
 // 默认项目根目录
 $default_root = '/srun3/www/srun4-mgr/';
 
+// 命令行参数
+$dry_run = false;
+$do_rollback = false;
+foreach (array_slice($argv, 1) as $arg) {
+    if ($arg === '--dry-run') {
+        $dry_run = true;
+    } elseif ($arg === '--rollback') {
+        $do_rollback = true;
+    } elseif (Func::hasPrefix($arg, '--backup=')) {
+        $backup .= substr($arg, strlen('--backup='));
+    } elseif ($arg === '--help' || $arg === '-h') {
+        replacemeHelp();
+        exit(0);
+    } else {
+        Func::logWarn('未知参数: ' . $arg);
+    }
+}
+
 // 尝试从配置文件获取项目根目录
 $replaceme_ini = new Config('./replaceme.ini');
 if ($replaceme_ini->get('object_root')) $default_root = $replaceme_ini->get('object_root');
@@ -26,18 +44,19 @@ if (!is_dir($root)) {
 $root = Func::hasSuffix($root, '/') ? $root : $root .= '/';
 
 // 判断是否为回滚操作
-if ($argc === 2 && $argv[1] === '--rollback') {
+if ($do_rollback) {
+    if ($dry_run) {
+        Func::logError('回滚操作暂不支持 --dry-run');
+        exit(1);
+    }
     (new Rollback)->run();
     exit(0);
 }
 
-// 支持自定义后缀
-if ($argc === 2 && Func::hasPrefix($argv[1], '--backup=')) {
-    $backup .= explode('=', $argv[1])[1];
-}
-
 // 非回滚操作则配置备份后缀
-if (!$replaceme_ini->set('backup_suffix', $backup) || !$replaceme_ini->set('install_time', date('Y-m-d H:i:s'))) {
+if ($dry_run) {
+    Func::logPrimary('[DRY-RUN] 预演模式: 不会修改任何文件, 也不会写入 replaceme.ini');
+} elseif (!$replaceme_ini->set('backup_suffix', $backup) || !$replaceme_ini->set('install_time', date('Y-m-d H:i:s'))) {
     Func::logError('写入replaceme.ini失败, 请检查当前目录和replaceme.ini权限');
     exit(1);
 }
@@ -78,9 +97,23 @@ class Config
         if (empty($data)) return '';
         $str = '';
         foreach ($data as $key => $datum) {
-            $str .= "$key=$datum\r\n";
+            $str .= $key . '=' . $this->encodeValue($datum) . PHP_EOL;
         }
         return $str;
+    }
+
+    /**
+     * 编码 ini 值: 含空格/特殊字符时加双引号, 避免 parse_ini_file 读回时出错
+     * @param mixed $value
+     * @return string
+     */
+    private function encodeValue($value): string
+    {
+        $value = (string)$value;
+        if ($value !== '' && preg_match('/^[A-Za-z0-9_.\/:@\-]+$/', $value)) {
+            return $value;
+        }
+        return '"' . str_replace(['\\', '"'], ['\\\\', '\\"'], $value) . '"';
     }
 }
 
@@ -358,13 +391,19 @@ class Func
 }
 
 loopDir('.', $ignore, $root, $backup, $replaceme_ini->get('ignore_dir_prefix'));
+if ($dry_run) Func::logPrimary('[DRY-RUN] 预演结束, 未修改任何文件');
 
 function loopDir($path, $ignore, $root, $backup, $ignore_dir_prefix = '')
 {
+    global $dry_run;
     foreach (glob($path, GLOB_BRACE) as $file) {
         if ($file === './vendor') {
             Func::logInfo('当前目录替换时间可能较长, 请耐心等待....');
             $target = $root . str_replace('./', '', $file);
+            if ($dry_run) {
+                Func::logPrimary("[DRY-RUN] 将备份并替换目录: $target");
+                continue;
+            }
             if (is_dir($target)) {
                 if (rename($target, $target . $backup)) {
                     Func::logSuccess("备份成功: $target -> $target$backup");
@@ -390,8 +429,16 @@ function loopDir($path, $ignore, $root, $backup, $ignore_dir_prefix = '')
             loopDir($file . '/*', $ignore, $root, $backup, $ignore_dir_prefix);
         } else {
             // 备份(重命名) -> 替换(cp 拷贝)
-            $target = $root . str_replace('./', '', $file);
-            if ($ignore_dir_prefix) $target = str_replace($ignore_dir_prefix, '', $target);
+            $relative = str_replace('./', '', $file);
+            // 只去掉相对路径开头的忽略前缀，避免项目根目录中恰好包含相同片段时被误替换
+            if ($ignore_dir_prefix && strpos($relative, $ignore_dir_prefix) === 0) {
+                $relative = substr($relative, strlen($ignore_dir_prefix));
+            }
+            $target = $root . $relative;
+            if ($dry_run) {
+                Func::logPrimary(is_file($target) ? "[DRY-RUN] 将备份并替换: $target" : "[DRY-RUN] 将创建: $target");
+                continue;
+            }
             if (is_file($target)) {
                 // 备份
                 if (rename($target, $target . $backup)) {
@@ -424,4 +471,28 @@ function loopDir($path, $ignore, $root, $backup, $ignore_dir_prefix = '')
             }
         }
     }
+}
+
+/**
+ * 命令行帮助
+ * @return void
+ */
+function replacemeHelp()
+{
+    echo <<<TXT
+replaceme - 把安装包内的文件替换到服务器目标项目
+
+用法:
+  php ./replaceme                     交互式安装(会要求确认项目根目录)
+  php ./replaceme --backup=xxx        在时间戳后追加自定义备份后缀
+  php ./replaceme --dry-run           预演: 只打印将备份/替换/创建的文件, 不修改任何内容
+  php ./replaceme --rollback          回滚当前安装包内的文件
+  php ./replaceme --help              显示帮助
+
+配置(replaceme.ini):
+  object_root        目标项目在服务器上的绝对路径(自动生成, 可以更改)
+  backup_suffix      备份文件后缀(安装时自动生成)
+  ignore_dir_prefix  安装包中需要忽略的目录前缀(按需配置)
+
+TXT;
 }

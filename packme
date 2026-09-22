@@ -7,16 +7,51 @@
  * 运行于项目根目录 <br>
  * 首次运行会在当前目录下生成 dist/version.ini <br>
  * 主要是利用了git archive(归档)功能 <br>
- * 环境依赖: php>=7.4/git命令行/zippy <br>
+ * 环境依赖: php>=7.4(phar 扩展)/git命令行, 运行时无第三方库依赖 <br>
  * @author DM <769245396@qq.com>
  */
 
-use Alchemy\Zippy\Zippy;
-use luguohuakai\func\Func;
+// 工具版本, 发布时同步更新 CHANGELOG
+const PACKME_VERSION = '1.1.0-dev';
 
-require './vendor/autoload.php';
+// 内置的项目名 -> 服务器绝对路径映射(srun 内部约定), 可用 packme.ini 的 object_path_map 覆盖或扩展
+const PACKME_OBJECT_PATH_MAP = [
+    'SRUN4-SELFSERVICE' => '/srun3/www/srun4-selfservice/',
+    'SRUN4-API' => '/srun3/www/srun4-api/',
+    'SRUN4-API-74' => '/srun3/www/srun4-api/',
+    'SRUN4K-MANAGENT' => '/srun3/www/srun4-mgr/',
+    'SRUN4-MGR' => '/srun3/www/srun4-mgr/',
+    'SRUN4-SYSTEM' => '/srun3/www/srun4-system/',
+    'SRUNDIY' => '/srun3/www/srunDIY/',
+    'SRUN4-WEBCRON' => '/srun3/www/srun4-webcron/',
+    'SRUN_LOGINWEB' => '/srun3/www/srun_loginweb/',
+    'SRUN4-IDEVM' => '/srun3/www/srun4-idevm/',
+    'SRUN4-IDEVM-SELFSERVICE' => '/srun3/www/srun4-idevm-selfservice/',
+    'SRUN_DEVMGRT' => '/srun3/www/srun_devmgrt/',
+    'SRUNLOGWEB' => '/srun3/www/srunlogweb/',
+    'SRUNWEIXIN' => '/srun3/www/srunweixin/',
+    'WEBAUTHN' => '/srun3/www/webauthn/',
+    'WIFI_PORTAL' => '/srun3/www/wifi_portal/',
+    'SRUN_SERVICE' => '/srun3/www/srun_service/',
+    'SRUN4K-REPORT' => '/srun3/www/srun4k-report/',
+    'SRUN4-BI-SERVER' => '/srun3/www/srun4-bi-server/',
+    'MICRODRAW' => '/srun3/www/srun_mq/',
+    'ZABBIXFROMGITHUB' => '/usr/share/zabbix/',
+    'PACKME' => '/packme/',
+];
 
-Func::logInfo('PACKME V1.0 POWERED BY LUGUOHUAKAI');
+// 命令行参数(不需要 autoload 也能用)
+$cli_args = $_SERVER['argv'] ?? [];
+if (in_array('--version', $cli_args, true)) {
+    fwrite(STDOUT, 'packme ' . PACKME_VERSION . PHP_EOL);
+    exit(0);
+}
+if (in_array('--help', $cli_args, true)) {
+    packmeHelp();
+    exit(0);
+}
+
+Func::logInfo('PACKME ' . PACKME_VERSION . ' POWERED BY LUGUOHUAKAI');
 Func::logInfo();
 
 // 准备所需文件====================================================================
@@ -27,8 +62,9 @@ if (!is_file($version_file)) file_put_contents($version_file, '');
 
 // 初始化Git====================================================================
 $git = new Git;
-$replaceme = './vendor/luguohuakai/packme/replaceme';
-$replaceme5 = './vendor/luguohuakai/packme/replaceme5';
+// 优先使用项目内已安装的 replaceme, 找不到时回退到本脚本所在目录(便于未 composer install 时使用)
+$replaceme = is_file('./vendor/luguohuakai/packme/replaceme') ? './vendor/luguohuakai/packme/replaceme' : __DIR__ . '/replaceme';
+$replaceme5 = is_file('./vendor/luguohuakai/packme/replaceme5') ? './vendor/luguohuakai/packme/replaceme5' : __DIR__ . '/replaceme5';
 if (is_file($replaceme)) $git->addFile($replaceme);
 if (is_file($replaceme5)) $git->addFile($replaceme5);
 
@@ -38,79 +74,32 @@ $object_name = strtoupper($git->objectName());
 $replaceme_ini_file = './replaceme.ini';
 if (!is_file($replaceme_ini_file)) file_put_contents($replaceme_ini_file, 'object_root=/srun3/www/srun4-mgr/');
 $replaceme_ini = new Ini($replaceme_ini_file);
-$object_path = '';
-switch ($object_name) {
-    case strtoupper('srun4-selfservice'):
-        $object_path = '/srun3/www/srun4-selfservice/';
-        break;
-    case strtoupper('srun4-api'):
-    case strtoupper('srun4-api-74'):
-        $object_path = '/srun3/www/srun4-api/';
-        break;
-    case strtoupper('srun4k-managent'):
-    case strtoupper('srun4-mgr'):
-        $object_path = '/srun3/www/srun4-mgr/';
-        break;
-    case strtoupper('srun4-system'):
-        $object_path = '/srun3/www/srun4-system/';
-        break;
-    case strtoupper('srunDIY'):
-        $object_path = '/srun3/www/srunDIY/';
-        break;
-    case strtoupper('srun4-webcron'):
-        $object_path = '/srun3/www/srun4-webcron/';
-        break;
-    case strtoupper('srun_loginweb'):
-        $object_path = '/srun3/www/srun_loginweb/';
-        break;
-    case strtoupper('srun4-idevm'):
-        $object_path = '/srun3/www/srun4-idevm/';
-        break;
-    case strtoupper('srun4-idevm-selfservice'):
-        $object_path = '/srun3/www/srun4-idevm-selfservice/';
-        break;
-    case strtoupper('srun_devmgrt'):
-        $object_path = '/srun3/www/srun_devmgrt/';
-        break;
-    case strtoupper('srunlogweb'):
-        $object_path = '/srun3/www/srunlogweb/';
-        break;
-    case strtoupper('srunweixin'):
-        $object_path = '/srun3/www/srunweixin/';
-        break;
-    case strtoupper('webauthn'):
-        $object_path = '/srun3/www/webauthn/';
-        break;
-    case strtoupper('wifi_portal'):
-        $object_path = '/srun3/www/wifi_portal/';
-        break;
-    case strtoupper('srun_service'):
-        $object_path = '/srun3/www/srun_service/';
-        break;
-    case strtoupper('srun4k-report'):
-        $object_path = '/srun3/www/srun4k-report/';
-        break;
-    case strtoupper('srun4-bi-server'):
-        $object_path = '/srun3/www/srun4-bi-server/';
-        break;
-    case strtoupper('MicroDraw'):
-        $object_path = '/srun3/www/srun_mq/';
-        break;
-    case strtoupper('zabbixFromGithub'):
-        $object_path = '/usr/share/zabbix/';
-        break;
-    case strtoupper('packme'):
-        $object_path = '/packme/';
-        break;
+
+// packme.ini 可选配置
+$packme_ini = new Ini('./packme.ini');
+
+// 项目名 -> 服务器路径: 内置映射(srun 内部约定) + packme.ini 的 object_path_map 覆盖
+$object_path_map = PACKME_OBJECT_PATH_MAP;
+$custom_path_map = json_decode((string)$packme_ini->get('object_path_map'), true);
+if (is_array($custom_path_map)) {
+    foreach ($custom_path_map as $name => $path) {
+        if (is_string($name) && is_string($path)) {
+            $object_path_map[strtoupper($name)] = $path;
+        }
+    }
 }
+$object_path = $object_path_map[$object_name] ?? '';
+
 if ($object_path) $replaceme_ini->set('object_root', $object_path);
 if (is_file($replaceme_ini_file)) $git->addFile($replaceme_ini_file);
 
-// 使用信息统计====================================================================
-@Func::post('http://218.75.75.91:4845/packme/default/add', ['name' => $object_name, 'path' => $object_path]);
+// 使用信息统计(可用 packme.ini 的 report_usage=0 或环境变量 PACKME_REPORT_USAGE=0 关闭)====================================================================
+if ($packme_ini->get('report_usage') !== '0' && getenv('PACKME_REPORT_USAGE') !== '0') {
+    reportUsage($object_name, $object_path);
+}
 
 // 选择打包方式====================================================================
-// 打包方式 1:全量打包(默认) 2:最近一次提交和当前未提交的文件 3:某两次提交的差异文件 4:当前已修改但未提交的文件
+// 打包方式 1:全量打包 2:最近一次提交和当前未提交的文件 3:某两次提交的差异文件 4:当前已修改但未提交的文件
 Func::logInfo('Please select packaging method:');
 Func::logInfo('      [1]: Full packaging');
 Func::logInfo('      [2]: Pack the most recently commit and currently not commit files');
@@ -135,69 +124,66 @@ switch ($choice) {
         $file = "{$object_name}_LAST2NOW_{$time}_$last_hash.tar.gz";
         genVersion($version_file, $time, $git);
         $rs = $git->output($file)->newCommit('NOW')->oldCommit('HEAD~1')->setProgressBar($progress)->run();
-        if ($rs !== null) {
-            Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
+        if ($rs === null) exit(1);
+        Func::logInfo($rs);
+        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         exit(0);
     case 5:
         $progress = new ProgressBar(100, "Packing last commit...");
         $file = "{$object_name}_LAST1COMMIT_{$time}_$last_hash.tar.gz";
         genVersion($version_file, $time, $git);
         $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~1')->setProgressBar($progress)->run();
-        if ($rs !== null) {
-            if ($rs) Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
+        if ($rs === null) exit(1);
+        if ($rs) Func::logInfo($rs);
+        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         exit(0);
     case 6:
         $progress = new ProgressBar(100, "Packing last two commits...");
         $file = "{$object_name}_LAST2COMMIT_{$time}_$last_hash.tar.gz";
         genVersion($version_file, $time, $git);
         $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~2')->setProgressBar($progress)->run();
-        if ($rs !== null) {
-            Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
+        if ($rs === null) exit(1);
+        Func::logInfo($rs);
+        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         exit(0);
     case 4:
         $progress = new ProgressBar(100, "Packing uncommitted changes...");
         $file = "{$object_name}_NOT_COMMIT_{$time}_$last_hash.tar.gz";
         genVersion($version_file, $time, $git);
         $rs = $git->output($file)->newCommit('NOW')->setProgressBar($progress)->run();
-        if ($rs !== null) {
-            Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
+        if ($rs === null) exit(1);
+        Func::logInfo($rs);
+        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         exit(0);
     case 3:
-        Func::logInfo('Please enter new commit id(<=):', false);
-        $new = trim(fgets(STDIN));
+        Func::logInfo('Please enter new commit id(<=) (default:HEAD):', false);
+        $new = resolveCommitId(trim(fgets(STDIN)), 'HEAD');
+        if ($new === '') exit(1);
+        Func::logInfo('Please enter old commit id(>) (default:HEAD~1):', false);
+        $old = resolveCommitId(trim(fgets(STDIN)), 'HEAD~1');
+        if ($old === '') exit(1);
         $_new = strtoupper($new);
-        Func::logInfo('Please enter old commit id(>):', false);
-        $old = trim(fgets(STDIN));
         $_old = strtoupper($old);
         $progress = new ProgressBar(100, "Packing changes between commits...");
         $file = "{$object_name}_2COMMIT_{$time}_{$_new}_$_old.tar.gz";
         genVersion($version_file, $time, $git);
         $rs = $git->output($file)->newCommit($new)->oldCommit($old)->setProgressBar($progress)->run();
-        if ($rs !== null) {
-            Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
+        if ($rs === null) exit(1);
+        Func::logInfo($rs);
+        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         exit(0);
     case 7:
         Func::logInfo('Please enter the commit id:', false);
-        $new = trim(fgets(STDIN));
+        $new = resolveCommitId(trim(fgets(STDIN)));
+        if ($new === '') exit(1);
         $_new = strtoupper($new);
         $progress = new ProgressBar(100, "Packing specific commit...");
         $file = "{$object_name}_ONE_COMMIT_{$time}_$_new.tar.gz";
         genVersion($version_file, $time, $git);
         $rs = $git->output($file)->newCommit($new)->oldCommit($new . '~')->setProgressBar($progress)->run();
-        if ($rs !== null) {
-            Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
+        if ($rs === null) exit(1);
+        Func::logInfo($rs);
+        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         exit(0);
     case 8:
         Func::logInfo('Please enter the branch name(default:current branch):', false);
@@ -215,25 +201,85 @@ switch ($choice) {
         $file = "{$object_name}_BRANCH_{$time}_{$_new}_$_old.tar.gz";
         genVersion($version_file, $time, $git);
         $rs = $git->output($file)->newCommit($new)->oldCommit($old)->setProgressBar($progress)->run();
-        if ($rs !== null) {
-            Func::logInfo($rs);
-            Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        }
+        if ($rs === null) exit(1);
+        Func::logInfo($rs);
+        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
         exit(0);
     case 9: // 仅打包指定目录 不生成版本信息
         $file = "./dist/{$object_name}_PATH_$time.tar.gz";
-        packPath($file);
-        exit(0);
+        exit(packPath($file) ? 0 : 1);
     case 1:
         $version = genVersion($version_file, $time, $git);
-        fullPack($git, $object_name, $version, $version_file);
-        break;
+        exit(fullPack($git, $object_name, $version, $version_file) ? 0 : 1);
     default:
         Func::logError('Your input is incorrect, please re-enter');
         goto choice;
 }
 
 // 类====================================================================
+
+/**
+ * 命令行输出与字符串工具(内置实现, 不依赖第三方库)
+ */
+class Func
+{
+    public static function logInfo(string $msg = '', bool $wrap = true)
+    {
+        if ($wrap) $msg .= PHP_EOL;
+        echo $msg;
+    }
+
+    public static function logPrimary(string $msg = '', bool $wrap = true)
+    {
+        $msg = "\033[34m $msg \033[0m";
+        if ($wrap) $msg .= PHP_EOL;
+        echo $msg;
+    }
+
+    public static function logWarn(string $msg = '', bool $wrap = true)
+    {
+        $msg = "\033[33m $msg \033[0m";
+        if ($wrap) $msg .= PHP_EOL;
+        echo $msg;
+    }
+
+    public static function logError(string $msg = '', bool $wrap = true)
+    {
+        $msg = "\033[41m $msg \033[0m";
+        if ($wrap) $msg .= PHP_EOL;
+        echo $msg;
+    }
+
+    public static function logSuccess(string $msg = '', bool $wrap = true)
+    {
+        $msg = "\033[32m $msg \033[0m";
+        if ($wrap) $msg .= PHP_EOL;
+        echo $msg;
+    }
+
+    /**
+     * 检查字符串是否以指定字符串结尾(按字节比较, 对 UTF-8 同样正确)
+     * @param string $haystack
+     * @param string $needle
+     * @return bool
+     */
+    public static function hasSuffix(string $haystack, string $needle): bool
+    {
+        if ($needle === '') return true;
+        return substr($haystack, -strlen($needle)) === $needle;
+    }
+
+    /**
+     * 检查字符串是否以指定字符串开头
+     * @param string $haystack
+     * @param string $needle
+     * @return bool
+     */
+    public static function hasPrefix(string $haystack, string $needle): bool
+    {
+        return strncmp($haystack, $needle, strlen($needle)) === 0;
+    }
+}
 
 class Ini
 {
@@ -276,9 +322,23 @@ class Ini
         if (empty($data)) return '';
         $str = '';
         foreach ($data as $key => $datum) {
-            $str .= "$key=$datum\r\n";
+            $str .= $key . '=' . $this->encodeValue($datum) . PHP_EOL;
         }
         return $str;
+    }
+
+    /**
+     * 编码 ini 值: 含空格/特殊字符时加双引号, 避免 parse_ini_file 读回时出错
+     * @param mixed $value
+     * @return string
+     */
+    private function encodeValue($value): string
+    {
+        $value = (string)$value;
+        if ($value !== '' && preg_match('/^[A-Za-z0-9_.\/:@\-]+$/', $value)) {
+            return $value;
+        }
+        return '"' . str_replace(['\\', '"'], ['\\\\', '\\"'], $value) . '"';
     }
 }
 
@@ -398,41 +458,107 @@ class Git
 
     public function prepare(): Git
     {
-        $this->cmd .= 'git archive ';
-        if ($this->branch) $this->cmd .= "$this->branch ";
-        if ($this->output) $this->cmd .= "-o $this->dist$this->output ";
-        if ($this->format) $this->cmd .= "--format=$this->format ";
-        if (!empty($this->add_file)) {
-            foreach ($this->add_file as $item) {
-                $this->cmd .= "--add-file=$item ";
-            }
-        }
+        // 先收集变更文件并生成说明文件，说明文件同样通过 --add-file 进入压缩包
+        // $selector 是 git archive 的 tree-ish: NOW 模式是临时 tree 的 sha，其它模式是 commit id + 差异文件
+        $selector = '';
         if ($this->new_commit) {
             if ($this->new_commit === 'NOW') {
-                $this->cmd .= "HEAD ";
+                $selector = $this->prepareWorktree();
+                if ($this->prepare_error !== null) return $this;
             } else {
-                $this->cmd .= "$this->new_commit ";
+                $pathspecs = $this->prepareDiff();
+                if ($this->prepare_error !== null) return $this;
+                $selector = trim(escapeshellarg($this->new_commit) . ' ' . $pathspecs);
             }
-            $this->prepareDiff();
         }
+
+        $this->cmd .= 'git archive ';
+        if ($this->branch) $this->cmd .= escapeshellarg($this->branch) . ' ';
+        if ($this->output) $this->cmd .= '-o ' . escapeshellarg($this->dist . $this->output) . ' ';
+        if ($this->format) $this->cmd .= '--format=' . escapeshellarg($this->format) . ' ';
+        foreach ($this->add_file as $item) {
+            $this->cmd .= '--add-file=' . escapeshellarg($item) . ' ';
+        }
+        if ($selector !== '') $this->cmd .= "$selector ";
         $this->cmd = trim($this->cmd);
         return $this;
     }
 
-    // : 需要排除已删除的文件, 否则会打包失败: fatal: pathspec 'xxx' did not match any files
-    private function prepareDiff()
+    /**
+     * NOW 模式(打包未提交的工作区变更)专用
+     *
+     * git archive 只能归档 commit/tree 的内容，直接 `git archive HEAD <pathspec>` 有两个问题：
+     * 1. 归档出来的是 HEAD 里的旧内容，而不是工作区修改后的内容；
+     * 2. 新增(已 git add)的文件不在 HEAD 中，作为 pathspec 会报
+     *    fatal: pathspec 'xxx' did not match any files。
+     * 因此这里先把变更文件写入临时索引，再用 git write-tree 得到临时 tree 进行归档。
+     * 该过程只读取工作区，不会修改当前索引和 HEAD。
+     * @return string 临时 tree 的 sha；失败时返回空字符串并设置 prepare_error
+     */
+    private function prepareWorktree(): string
     {
-        $diff = 'git diff --diff-filter=ACMR --name-only %s %s';
+        $diff = $this->old_commit === 'HEAD~1'
+            ? 'git diff --diff-filter=ACMR --name-only HEAD~1'
+            : 'git diff --diff-filter=ACMR --name-only HEAD';
 
-        if ($this->new_commit === 'NOW' && !$this->old_commit) {
-            $diff = sprintf($diff, 'HEAD', '');
-        } elseif ($this->new_commit === 'NOW' && $this->old_commit === 'HEAD~1') {
-            $diff = sprintf($diff, 'HEAD~1', '');
-        } else {
-            $diff = sprintf($diff, $this->old_commit, $this->new_commit);
+        $files = $this->changedFiles($diff);
+        if ($this->prepare_error !== null) return '';
+        if (empty($files)) {
+            $this->prepare_error = 'No valid changed files found, packaging stopped';
+            return '';
         }
-        $diff = trim($diff);
 
+        $this->writeChangeFile($diff);
+        $this->warnUntrackedFiles();
+
+        $files = $this->excludeAddedArchiveFiles($files);
+        if (empty($files)) {
+            $this->prepare_error = 'No valid changed files found, packaging stopped';
+            return '';
+        }
+
+        $tree = $this->createTreeFromWorktree($files);
+        return $tree ?? '';
+    }
+
+    /**
+     * 打包某两次提交之间的差异文件
+     * @return string 需要追加到 git archive 命令末尾的 pathspec 串
+     */
+    private function prepareDiff(): string
+    {
+        $diff = trim(sprintf('git diff --diff-filter=ACMR --name-only %s %s', escapeshellarg($this->old_commit), escapeshellarg($this->new_commit)));
+
+        $files = $this->changedFiles($diff);
+        if ($this->prepare_error !== null) return '';
+        if (empty($files)) {
+            $this->prepare_error = 'No valid changed files found, packaging stopped';
+            return '';
+        }
+
+        $this->writeChangeFile($diff);
+
+        $files = $this->excludeAddedArchiveFiles($files);
+        if (empty($files)) {
+            $this->prepare_error = 'No valid changed files found, packaging stopped';
+            return '';
+        }
+
+        // 每个文件路径单独转义，避免特殊字符和中文编码问题
+        $pathspecs = '';
+        foreach ($files as $file) {
+            $pathspecs .= escapeshellarg($file) . ' ';
+        }
+        return trim($pathspecs);
+    }
+
+    /**
+     * 获取变更文件列表(已通过 --diff-filter 排除删除的文件)
+     * @param string $diff 形如 git diff --diff-filter=ACMR --name-only xxx 的命令
+     * @return array
+     */
+    private function changedFiles(string $diff): array
+    {
         // 先获取变更文件列表，避免直接在命令中使用 $() 导致中文路径编码问题
         $output = [];
         $return_code = 0;
@@ -458,15 +584,14 @@ class Git
 
         if ($return_code !== 0) {
             $this->prepare_error = 'Failed to get changed files';
-            return;
+            return [];
         }
 
         if (empty($output)) {
             $this->prepare_error = 'No changed files found, packaging stopped';
-            return;
+            return [];
         }
 
-        // 处理文件列表：过滤已删除的文件，并验证文件是否存在
         $files = [];
         foreach ($output as $file) {
             $file = trim($file);
@@ -484,40 +609,108 @@ class Git
                 return chr(octdec($matches[1]));
             }, $file);
 
-            // 检查文件是否存在于指定的 commit 中
+            if ($decodedFile === '') continue;
+
             if ($this->new_commit === 'NOW') {
-                // 对于 NOW，检查工作区文件是否存在
-                if (file_exists($decodedFile)) {
-                    if (!$this->isAddedArchiveFile($decodedFile)) {
-                        $files[] = $decodedFile;
-                    }
-                }
+                // 对于 NOW，只保留工作区真实存在的文件
+                if (is_dir($decodedFile)) continue;
+                if (is_file($decodedFile)) $files[] = $decodedFile;
             } else {
                 // 对于特定 commit，检查文件是否存在于该 commit 中
                 // git cat-file -e 的语法是 commit:path，需要将整个参数转义
                 $commit_path = $this->new_commit . ':' . $decodedFile;
                 $check_cmd = 'git cat-file -e ' . escapeshellarg($commit_path) . ' 2>' . $this->nullDevice();
                 exec($check_cmd, $check_output, $check_code);
-                if ($check_code === 0 && !$this->isAddedArchiveFile($decodedFile)) {
-                    $files[] = $decodedFile;
-                }
+                if ($check_code === 0) $files[] = $decodedFile;
             }
         }
+        return $files;
+    }
 
-        // 如果没有有效文件，不添加任何路径
-        if (empty($files)) {
-            $this->prepare_error = 'No valid changed files found, packaging stopped';
-            return;
+    /**
+     * 用工作区内容构造临时 tree(只影响临时索引文件，不修改当前索引与工作区)
+     * @param array $files
+     * @return string|null
+     */
+    private function createTreeFromWorktree(array $files): ?string
+    {
+        $tmpIndex = tempnam(sys_get_temp_dir(), 'packme_index_');
+        if ($tmpIndex === false) {
+            $this->prepare_error = 'Failed to create temporary git index';
+            return null;
+        }
+        // git 需要一个不存在的路径来初始化索引，否则会认为索引已损坏
+        @unlink($tmpIndex);
+
+        $old_index = getenv('GIT_INDEX_FILE');
+        putenv('GIT_INDEX_FILE=' . $tmpIndex);
+        try {
+            if ($this->execGit('git read-tree --empty') === null) {
+                $this->prepare_error = 'Failed to init temporary git index';
+                return null;
+            }
+            foreach ($files as $file) {
+                if ($this->execGit('git add -- ' . escapeshellarg($file)) === null) {
+                    $this->prepare_error = 'Failed to add file to temporary index: ' . $file;
+                    return null;
+                }
+            }
+            $tree = $this->execGit('git write-tree');
+            if (!$tree) {
+                $this->prepare_error = 'Failed to write temporary tree';
+                return null;
+            }
+            return $tree;
+        } finally {
+            if ($old_index !== false) {
+                putenv('GIT_INDEX_FILE=' . $old_index);
+            } else {
+                putenv('GIT_INDEX_FILE');
+            }
+            @unlink($tmpIndex);
+        }
+    }
+
+    /**
+     * 未跟踪(未 git add)的文件不会被自动打包，这里明确提示，避免被静默漏掉
+     * @return void
+     */
+    private function warnUntrackedFiles(): void
+    {
+        $output = [];
+        $code = 0;
+        exec('git -c core.quotepath=false ls-files --others --exclude-standard 2>' . $this->nullDevice(), $output, $code);
+        if ($code !== 0) return;
+
+        $dist_prefix = $this->normalizePath($this->dist);
+        $untracked = [];
+        foreach ($output as $file) {
+            $file = trim($file);
+            if ($file === '') continue;
+            $normalized = $this->normalizePath($file);
+            // 打包产物目录、以及会通过 --add-file 进入压缩包的文件不算漏打
+            if ($dist_prefix !== '' && ($normalized === $dist_prefix || strpos($normalized, $dist_prefix . '/') === 0)) continue;
+            if ($this->isAddedArchiveFile($file)) continue;
+            $untracked[] = $file;
         }
 
-        // 将文件列表追加到命令中，每个文件路径单独添加
-        // 使用 escapeshellarg() 函数安全地转义路径，避免特殊字符和中文编码问题
-        foreach ($files as $file) {
-            $this->cmd .= ' ' . escapeshellarg($file);
+        if ($untracked) {
+            Func::logWarn('以下未跟踪文件不会被包含, 如需打包请先执行 git add:');
+            foreach ($untracked as $file) {
+                Func::logWarn('  ' . $file);
+            }
         }
+    }
 
+    /**
+     * 生成 changes.txt 以及与压缩包同名的说明文件，并把它们加入打包列表
+     * @param string $diff
+     * @return void
+     */
+    private function writeChangeFile(string $diff): void
+    {
         $packme_ini = new Ini('./packme.ini');
-        if (!($packme_ini->get('generate_change_txt') === '0')) {
+        if ($packme_ini->get('generate_change_txt') !== '0') {
             $log = 'git log %s..%s --pretty=format:"%%B%%nChange Files" --name-only --no-merges';
             $this->clearChangeFile();
             if ($this->new_commit === 'NOW' && !$this->old_commit) {
@@ -531,21 +724,46 @@ class Git
         }
 
         // 生成和压缩包同名的说明文件用以解释压缩包, 而不用打开压缩包查看changes.txt
-        copy($this->change_file, $this->change_file_pro);
+        if (is_file($this->change_file)) {
+            copy($this->change_file, $this->change_file_pro);
+            $this->addFile($this->change_file);
+        }
+        if (is_file($this->change_file_pro)) {
+            $this->addFile($this->change_file_pro);
+        }
     }
 
     /**
-     * git archive --add-file 会把文件放到压缩包根目录，避免差异文件里再次加入同名根文件。
+     * 过滤掉已经通过 --add-file 进入压缩包的文件，避免同一个文件在压缩包里出现两次
+     * @param array $files
+     * @return array
+     */
+    private function excludeAddedArchiveFiles(array $files): array
+    {
+        $result = [];
+        foreach ($files as $file) {
+            if (!$this->isAddedArchiveFile($file)) $result[] = $file;
+        }
+        return $result;
+    }
+
+    /**
+     * git archive --add-file 会把文件放到压缩包根目录，避免差异文件里再次加入同一个文件:
+     * 1. 路径完全相同(如 dist/changes.txt、dist/version.ini)；
+     * 2. 压缩包根目录下的同名文件(如 replaceme.ini)。
      * @param string $file
      * @return bool
      */
     private function isAddedArchiveFile(string $file): bool
     {
         $normalizedFile = $this->normalizePath($file);
-        if (strpos($normalizedFile, '/') !== false) return false;
+        if ($normalizedFile === '') return false;
 
         foreach ($this->add_file as $addFile) {
-            if (basename($this->normalizePath($addFile)) === $normalizedFile) {
+            $normalizedAdd = $this->normalizePath($addFile);
+            if ($normalizedAdd === '') continue;
+            if ($normalizedAdd === $normalizedFile) return true;
+            if (strpos($normalizedFile, '/') === false && basename($normalizedAdd) === $normalizedFile) {
                 return true;
             }
         }
@@ -597,13 +815,12 @@ class Git
 
     public function run(): ?string
     {
+        // 说明文件已在 prepare() 中生成并加入打包列表
         if (!$this->cmd) $this->prepare();
         if ($this->prepare_error !== null) {
             Func::logError($this->prepare_error);
             return null;
         }
-        if (is_file($this->change_file)) $this->addFile($this->change_file);
-        if (is_file($this->change_file_pro)) $this->addFile($this->change_file_pro);
 
         if (PHP_OS === 'WINNT' && !$this->branch) {
             $ps = $this->execGit('where powershell');
@@ -673,7 +890,7 @@ class Git
     public function branchCommitId($branch = '')
     {
         if (!$branch) $branch = $this->branchName();
-        exec("git reflog show $branch", $output);
+        exec('git reflog show ' . escapeshellarg($branch), $output);
         if (!empty($output)) {
             $old = explode(' ', array_pop($output))[0];
             $new = explode(' ', array_shift($output))[0];
@@ -716,7 +933,7 @@ class ProgressBar
     private int $current = 0;
     private float $startTime;
     private int $lastPercent = 0;
-    private int $lastUpdateTime = 0;
+    private float $lastUpdateTime = 0;
     private float $updateInterval = 0.1; // 更新间隔(秒)
     private $message;
 
@@ -746,7 +963,7 @@ class ProgressBar
             return;
         }
 
-        $percent = floor(($this->current / $this->total) * 100);
+        $percent = (int)floor(($this->current / $this->total) * 100);
         if ($percent == $this->lastPercent) {
             return;
         }
@@ -757,8 +974,9 @@ class ProgressBar
         $elapsed = $now - $this->startTime;
         $rate = $elapsed > 0 ? $this->current / $elapsed : 0;
 
-        $bar = str_repeat('=', floor($percent / 2));
-        $empty = str_repeat(' ', 50 - floor($percent / 2));
+        $half = (int)floor($percent / 2);
+        $bar = str_repeat('=', $half);
+        $empty = str_repeat(' ', 50 - $half);
 
         // 清除当前行并移动到行首
         echo "\r\033[K";
@@ -797,11 +1015,103 @@ class ProgressBar
 // 方法====================================================================
 
 /**
- * 根据目录进行打包
- * @param string $file 生成的文件路径
+ * 命令行帮助
  * @return void
  */
-function packPath(string $file)
+function packmeHelp(): void
+{
+    $version = PACKME_VERSION;
+    echo <<<TXT
+packme $version - 一键打包项目变更并生成可部署压缩包
+
+用法:
+  php vendor/bin/packme              交互式选择打包模式
+  php vendor/bin/packme --help       显示帮助
+  php vendor/bin/packme --version    显示版本
+
+打包模式:
+  [1] 全量打包(可选是否包含 vendor)
+  [2] 最近一次提交 + 当前未提交的变更
+  [3] 两次提交之间的差异(new <= / old >)
+  [4] 当前已修改但未提交的文件
+  [5] 最近一次提交(默认)
+  [6] 最近两次提交
+  [7] 指定的某一次提交
+  [8] 指定分支(分支创建到最新)
+  [9] 指定的目录或文件
+
+配置:
+  packme.ini    generate_change_txt / report_usage / object_path_map
+  replaceme.ini object_root / ignore_dir_prefix 等
+
+TXT;
+}
+
+/**
+ * 使用量上报(失败或超时都不应影响打包)
+ * @param string $name
+ * @param string $path
+ * @return void
+ */
+function reportUsage(string $name, string $path): void
+{
+    $url = 'http://218.75.75.91:4845/packme/default/add';
+    $payload = http_build_query(['name' => $name, 'path' => $path]);
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 2,
+            CURLOPT_TIMEOUT => 2,
+        ]);
+        @curl_exec($ch);
+        return;
+    }
+
+    $context = stream_context_create(['http' => [
+        'method' => 'POST',
+        'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
+        'content' => $payload,
+        'timeout' => 2,
+    ]]);
+    @file_get_contents($url, false, $context);
+}
+
+/**
+ * 校验用户输入的 commit id, 支持直接回车取默认值
+ * @param string $input
+ * @param string $default
+ * @return string 合法时返回原输入(或默认值), 否则返回空字符串
+ */
+function resolveCommitId(string $input, string $default = ''): string
+{
+    $input = trim($input);
+    if ($input === '') $input = $default;
+    if ($input === '') {
+        Func::logError('commit id 不能为空');
+        return '';
+    }
+
+    $null = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN' ? 'nul' : '/dev/null';
+    $output = [];
+    $code = 0;
+    exec('git rev-parse --verify --quiet ' . escapeshellarg($input . '^{commit}') . ' 2>' . $null, $output, $code);
+    if ($code !== 0) {
+        Func::logError('commit id 不存在或不是一次提交: ' . $input);
+        return '';
+    }
+    return $input;
+}
+
+/**
+ * 根据目录进行打包
+ * @param string $file 生成的文件路径
+ * @return bool
+ */
+function packPath(string $file): bool
 {
     Func::logPrimary("If you have any instructions about this installation package, please write them in advance './dist/changes.txt'");
     input:
@@ -814,42 +1124,112 @@ function packPath(string $file)
         Func::logError('Path not exists');
         goto input;
     } else {
-        $zippy = Zippy::load();
         $tar_file = str_replace('.gz', '', $file);
-        $tar = $zippy->create($tar_file);
-        $archivePath = getArchiveMemberPath($path);
-        $tar->addMembers($archivePath === '' ? [$path] : [$archivePath => $path]);
-        $dir = getArchiveDirectoryPrefix($path);
-
-        // 指定项目根路径
-        global $replaceme_ini;
-        $replaceme_ini->set('object_root', '/srun3/www/');
-
-        if (is_file('replaceme.ini')) $tar->addMembers([$dir . 'replaceme.ini' => 'replaceme.ini']);
-        global $replaceme, $replaceme5;
-        $r = str_replace('./', '', $replaceme);
-        $r5 = str_replace('./', '', $replaceme5);
-        if (is_file('replaceme')) $tar->addMembers([$dir . 'replaceme' => 'replaceme']);
-        if (is_file($r)) $tar->addMembers([$dir . 'replaceme' => $r]);
-        if (is_file('replaceme5')) $tar->addMembers([$dir . 'replaceme5' => 'replaceme5']);
-        if (is_file($r5)) $tar->addMembers([$dir . 'replaceme5' => $r5]);
-        if (is_file('dist/changes.txt')) {
-            $filePath = getRelativeFilePathsInSpecifyDirectory($path);
-            if ($filePath) {
-                $content = "\nChange Files\n";
-                $content .= implode("\n", $filePath);
-                file_put_contents('dist/changes.txt', $content, FILE_APPEND);
-            }
-            $tar->addMembers([$dir . 'changes.txt' => 'dist/changes.txt']);
+        @unlink($tar_file);
+        try {
+            $tar = new PharData($tar_file);
+        } catch (Throwable $e) {
+            Func::logError('Create tar failed: ' . $e->getMessage());
+            return false;
         }
+
+        try {
+            $archivePath = getArchiveMemberPath($path);
+            addToArchive($tar, $path, $archivePath);
+            $dir = getArchiveDirectoryPrefix($path);
+
+            // 指定项目根路径
+            global $replaceme_ini;
+            $replaceme_ini->set('object_root', '/srun3/www/');
+
+            if (is_file('replaceme.ini')) addToArchive($tar, 'replaceme.ini', $dir . 'replaceme.ini');
+            global $replaceme, $replaceme5;
+            $r = str_replace('./', '', $replaceme);
+            $r5 = str_replace('./', '', $replaceme5);
+            if (is_file('replaceme')) addToArchive($tar, 'replaceme', $dir . 'replaceme');
+            if (is_file($r)) addToArchive($tar, $r, $dir . 'replaceme');
+            if (is_file('replaceme5')) addToArchive($tar, 'replaceme5', $dir . 'replaceme5');
+            if (is_file($r5)) addToArchive($tar, $r5, $dir . 'replaceme5');
+            if (is_file('dist/changes.txt')) {
+                $filePath = getRelativeFilePathsInSpecifyDirectory($path);
+                if ($filePath) {
+                    $content = "\nChange Files\n";
+                    $content .= implode("\n", $filePath);
+                    file_put_contents('dist/changes.txt', $content, FILE_APPEND);
+                }
+                addToArchive($tar, 'dist/changes.txt', $dir . 'changes.txt');
+            }
+        } catch (Throwable $e) {
+            Func::logError('Add files to tar failed: ' . $e->getMessage());
+            unset($tar);
+            @unlink($tar_file);
+            return false;
+        }
+
+        // PharData 需要先释放对象, 写入才会真正落盘
+        unset($tar);
+
         if (!gzipFile($tar_file, $file)) {
             Func::logError("Compress tar failed: $tar_file");
-            return;
+            @unlink($tar_file);
+            return false;
         }
-        unlink($tar_file);
+        @unlink($tar_file);
 
         Func::logPrimary('Generated File: ' . $file);
+        return true;
     }
+}
+
+/**
+ * 把本地文件或目录加入 tar 压缩包, dest 为目标路径(可为空前缀)
+ * @param PharData $archive
+ * @param string $local
+ * @param string $dest
+ * @return void
+ */
+function addToArchive(PharData $archive, string $local, string $dest = ''): void
+{
+    $local = rtrim($local, '/\\');
+    if ($local === '') return;
+
+    $dest = trim(str_replace('\\', '/', $dest), '/');
+    if ($dest === '.') $dest = '';
+
+    if (is_file($local)) {
+        addArchiveFile($archive, $local, $dest === '' ? basename($local) : $dest);
+        return;
+    }
+    if (!is_dir($local)) return;
+
+    $prefix = $dest === '' ? '' : $dest . '/';
+    $baseLen = strlen($local) + 1;
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($local, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
+    );
+    foreach ($iterator as $item) {
+        $relative = str_replace('\\', '/', substr($item->getPathname(), $baseLen));
+        $target = $prefix . $relative;
+        if ($item->isDir()) {
+            if (!isset($archive[$target])) $archive->addEmptyDir($target);
+        } else {
+            addArchiveFile($archive, $item->getPathname(), $target);
+        }
+    }
+}
+
+/**
+ * 加入单个文件, 目标已存在时保留先加入的内容(避免重复条目导致 PharData 抛异常)
+ * @param PharData $archive
+ * @param string $local
+ * @param string $target
+ * @return void
+ */
+function addArchiveFile(PharData $archive, string $local, string $target): void
+{
+    if ($target === '' || isset($archive[$target])) return;
+    $archive->addFile($local, $target);
 }
 
 /**
@@ -860,8 +1240,11 @@ function packPath(string $file)
 function getArchiveMemberPath(string $path): string
 {
     $normalizedPath = str_replace('\\', '/', trim($path));
+    // 去掉 Windows 盘符(如 D:/xxx)，避免 tar 成员名里出现冒号
+    $normalizedPath = preg_replace('#^[A-Za-z]:#', '', $normalizedPath);
     $normalizedPath = rtrim($normalizedPath, '/');
     $normalizedPath = preg_replace('#^(?:\./)+#', '', $normalizedPath);
+    // 绝对路径只保留相对部分，保证压缩包内的路径可跨平台解压
     return trim($normalizedPath, '/');
 }
 
@@ -960,9 +1343,9 @@ function gzipFile(string $source, string $destination): bool
  * @param $object_name
  * @param $version
  * @param $version_file
- * @return void
+ * @return bool
  */
-function fullPack(Git $git, $object_name, $version, $version_file)
+function fullPack(Git $git, $object_name, $version, $version_file): bool
 {
     Func::logPrimary('Packing vendor? (It will take a long time for y) (y/n) (default:n): ', false);
     $answer = trim(fgets(STDIN));
@@ -978,16 +1361,21 @@ function fullPack(Git $git, $object_name, $version, $version_file)
             Func::logInfo($rs);
         } else {
             Func::logError('command exec failed: ' . $git->cmd);
-            return;
+            return false;
         }
 
         $pack_file = $git->getOutPutFile();
-        $zippy = Zippy::load();
 
         // 打包 vendor
         $progress->setMessage("Packing vendor files...");
-        $archive = $zippy->open($pack_file);
-        $archive->addMembers('vendor');
+        try {
+            $archive = new PharData($pack_file);
+            addToArchive($archive, 'vendor', 'vendor');
+            unset($archive);
+        } catch (Throwable $e) {
+            Func::logError('Packing vendor failed: ' . $e->getMessage());
+            return false;
+        }
         $progress->setProgress(70);
 
         // 压缩文件
@@ -995,7 +1383,7 @@ function fullPack(Git $git, $object_name, $version, $version_file)
         $new_pack_file = $pack_file . '.gz';
         if (!gzipFile($pack_file, $new_pack_file)) {
             Func::logError("Compress tar failed: $pack_file");
-            return;
+            return false;
         }
         unlink($pack_file);
         $progress->setProgress(100);
@@ -1010,13 +1398,14 @@ function fullPack(Git $git, $object_name, $version, $version_file)
             Func::logInfo($rs);
         } else {
             Func::logError('command exec failed: ' . $git->cmd);
-            exit(1);
+            return false;
         }
         $new_pack_file = $git->getOutPutFile();
     }
 
     Func::logInfo("Packing finished");
     Func::logPrimary('Generated File: ' . $new_pack_file);
+    return true;
 }
 
 /**
