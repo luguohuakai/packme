@@ -2,6 +2,16 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## Unreleased
+
+### 新增
+
+- 新增 `build-phar.php` 与 `composer build-phar`, 可构建独立运行的 `packme.phar`
+  (内置 `replaceme` / `replaceme5`, 无需 composer 与任何第三方依赖)。
+- GitHub Release 工作流在打 tag 时自动构建并附带 `packme.phar`。
+- `packme` 支持从 phar 运行: phar 内的 `replaceme` / `replaceme5` 会先释放为临时文件
+  (保留文件名), 再交给 `git archive --add-file`, 保证压缩包内文件名正确。
+
 ## v1.1.1 - 2026-09-22
 
 ### 新增

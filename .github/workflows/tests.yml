@@ -49,6 +49,7 @@ jobs:
           php -l packme
           php -l replaceme
           php -l replaceme5
+          php -l build-phar.php
           php -l tests/integration.php
           php -l tests/unit.php
 
@@ -59,3 +60,9 @@ jobs:
           php packme --help
           php replaceme --help
           php replaceme5 --help
+
+      - name: Build phar
+        shell: pwsh
+        run: |
+          php -d phar.readonly=0 build-phar.php packme.phar
+          php packme.phar --version

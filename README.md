@@ -57,6 +57,10 @@ cd test && php ./replaceme
 php ./replaceme --rollback
 ```
 
+> 不想使用 composer 时, 可从 [Releases](https://github.com/luguohuakai/packme/releases) 下载独立运行的
+> `packme.phar`, 在项目根目录执行 `php packme.phar`(用法与 `vendor/bin/packme` 一致, 已内置
+> `replaceme` / `replaceme5`, 无需任何第三方依赖)。
+
 > 版本要求: `backup_suffix` 丢失问题在 **v1.0.43** 修复, 请勿使用更低版本。
 
 ---
@@ -196,6 +200,15 @@ composer test
 
 > 集成测试的 `composer install` 只执行一次并复用模版, 后续用例直接复制, 减少网络与耗时。
 > 保留失败时的临时目录: `PACKME_KEEP_TEST_TMP=1 composer test`
+
+构建独立运行的 phar(发布时由 CI 自动构建并附带在 Release 上):
+
+```bash
+composer build-phar                                  # 生成 ./packme.phar
+php -d phar.readonly=0 build-phar.php /tmp/custom.phar   # 指定输出路径
+```
+
+> 打包 phar 需要关闭 `phar.readonly`(上面的命令已带 `-d phar.readonly=0`); 运行 phar 无此要求。
 
 ---
 

@@ -62,9 +62,12 @@ if (!is_file($version_file)) file_put_contents($version_file, '');
 
 // 初始化Git====================================================================
 $git = new Git;
-// 优先使用项目内已安装的 replaceme, 找不到时回退到本脚本所在目录(便于未 composer install 时使用)
+// 优先使用项目内已安装的 replaceme, 找不到时回退到本脚本所在目录(composer 包目录或 phar 内)
 $replaceme = is_file('./vendor/luguohuakai/packme/replaceme') ? './vendor/luguohuakai/packme/replaceme' : __DIR__ . '/replaceme';
 $replaceme5 = is_file('./vendor/luguohuakai/packme/replaceme5') ? './vendor/luguohuakai/packme/replaceme5' : __DIR__ . '/replaceme5';
+// phar 内的路径无法交给 git/PharData 使用, 先释放为真实临时文件(保留原始文件名)
+$replaceme = releaseBundledFile($replaceme);
+$replaceme5 = releaseBundledFile($replaceme5);
 if (is_file($replaceme)) $git->addFile($replaceme);
 if (is_file($replaceme5)) $git->addFile($replaceme5);
 
@@ -916,9 +919,12 @@ class Git
             Func::logWarn('Change file contents is empty: ' . $this->change_file);
             if (is_file('./vendor/luguohuakai/packme/README.md')) {
                 $readme = './vendor/luguohuakai/packme/README.md';
-            } else {
+            } elseif (is_file('./README.md')) {
                 // 测试时使用
                 $readme = './README.md';
+            } else {
+                // phar 独立运行时使用内置 README
+                $readme = __DIR__ . '/README.md';
             }
             if (is_file($readme)) {
                 $separator2 = '## replaceme';
@@ -1222,6 +1228,30 @@ function resolveCommitId(string $input, string $default = ''): string
         return '';
     }
     return $input;
+}
+
+/**
+ * phar 内的文件无法直接交给 git / PharData 使用, 释放为真实临时文件并返回路径。
+ * 目录名带内容 hash 以便复用, 文件名保持原样( git archive --add-file 只取 basename )。
+ * @param string $path
+ * @return string 真实文件路径; 失败时返回空字符串
+ */
+function releaseBundledFile(string $path): string
+{
+    if ($path === '' || strpos($path, 'phar://') !== 0) return $path;
+
+    $content = @file_get_contents($path);
+    if ($content === false) return '';
+
+    $dir = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'packme_bundled_' . substr(md5($content), 0, 8);
+    if (!is_dir($dir) && !@mkdir($dir, 0700, true) && !is_dir($dir)) return '';
+
+    $target = $dir . DIRECTORY_SEPARATOR . basename($path);
+    if (!is_file($target) || @file_get_contents($target) !== $content) {
+        if (@file_put_contents($target, $content) === false) return '';
+        @chmod($target, 0755);
+    }
+    return $target;
 }
 
 /**

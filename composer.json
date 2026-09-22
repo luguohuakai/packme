@@ -25,7 +25,8 @@
     "test": [
       "@php tests/unit.php",
       "@php tests/integration.php"
-    ]
+    ],
+    "build-phar": "@php -d phar.readonly=0 build-phar.php"
   },
   "bin": [
     "packme"

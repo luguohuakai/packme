@@ -27,8 +27,12 @@ jobs:
           php -l packme
           php -l replaceme
           php -l replaceme5
+          php -l build-phar.php
+
+      - name: Build phar
+        run: php -d phar.readonly=0 build-phar.php packme.phar
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" packme.phar --title "$GITHUB_REF_NAME" --generate-notes

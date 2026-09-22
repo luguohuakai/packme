@@ -1,5 +1,6 @@
 /vendor/
 /composer.lock
 /dist/
+/packme.phar
 /.idea/
 .DS_Store

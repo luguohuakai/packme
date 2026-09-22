@@ -93,6 +93,9 @@ final class IntegrationSuite
             'lang=zh switches prompts to Chinese' => function (): void {
                 $this->testLanguageConfigSwitchesToChinese();
             },
+            'phar builds and packs standalone' => function (): void {
+                $this->testPharBuildAndRun();
+            },
         ];
 
         foreach ($tests as $name => $test) {
@@ -467,6 +470,40 @@ final class IntegrationSuite
         $this->assertContains('生成文件: ', $output, 'dynamic messages should be Chinese when lang=zh');
         $this->assertContains('以下未跟踪文件不会被包含', $output, 'untracked warning should be Chinese when lang=zh');
         $this->assertNotContains('Please select packaging method:', $output, 'menu should not stay English when lang=zh');
+    }
+
+    private function testPharBuildAndRun(): void
+    {
+        $pharDir = $this->createTempDir('packme-phar-');
+        $phar = $pharDir . '/packme.phar';
+
+        $build = $this->runCommand('php -d phar.readonly=0 build-phar.php ' . escapeshellarg($phar), $this->repoRoot);
+        $this->assertSame(0, $build->exitCode, 'building packme.phar should succeed: ' . $build->combinedOutput());
+        $this->assertTrue(is_file($phar), 'packme.phar should be created');
+
+        // phar 独立运行, 目标项目无需 composer
+        $projectDir = $this->createTempDir('packme-phar-project-');
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'head';\n");
+        $this->initGitRepository($projectDir, ['app']);
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'worktree';\n");
+
+        $run = $this->runCommand('php ' . escapeshellarg($phar), $projectDir, "4\n");
+        $this->assertSame(0, $run->exitCode, 'running packme.phar should succeed: ' . $run->combinedOutput());
+
+        $archive = $this->findSingleArchive($projectDir, '*_NOT_COMMIT_*.tar.gz');
+        $list = $this->runCommand('tar -tzf ' . escapeshellarg($archive), $projectDir);
+        $this->assertContains("replaceme\n", $list->stdout, 'phar should bundle replaceme at archive root');
+        $this->assertContains("replaceme5\n", $list->stdout, 'phar should bundle replaceme5 at archive root');
+        $this->assertSame(
+            "<?php echo 'worktree';\n",
+            $this->extractTarEntry($archive, 'app/a.php', $projectDir),
+            'phar should pack working tree content'
+        );
+        $this->assertContains(
+            'class Rollback',
+            $this->extractTarEntry($archive, 'replaceme', $projectDir),
+            'bundled replaceme should be the real script, not a renamed temp file'
+        );
     }
 
     private function createComposerProject(string $prefix): string
