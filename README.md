@@ -270,6 +270,7 @@ A: `replaceme.ini` 所在目录不可写。请给该目录/文件写权限后重
 
 - PHP `>= 7.4`(`replaceme` 使用类型属性); PHP5 环境请使用 `replaceme5`。
 - **请使用 `>= v1.0.43`**: 该版本修复了 `backup_suffix` 未持久化导致无法回滚的问题。
+- v1.1.2: 发布产物新增独立运行的 `packme.phar`(Release 自动附带), 也可用 `composer build-phar` 自行构建。
 - v1.1.1: `packme.ini` 新增 `lang`, 运行时提示可在英文(默认)与中文之间切换。
 - v1.1.0: 修复模式 2/4 打包旧内容、新增文件失败、`changes.txt` 未进包、`ignore_dir_prefix` 误替换、PHP 8.1+ 弃用告警; 移除 `alchemy/zippy` 与 `luguohuakai/func` 依赖, 运行时零第三方依赖; 新增 `--help` / `--version` / `--dry-run` 与 `packme.ini` 配置项。
 - 变更记录见 [`CHANGELOG.md`](./CHANGELOG.md)。
