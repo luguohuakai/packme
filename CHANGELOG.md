@@ -2,7 +2,7 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## Unreleased (1.1.0)
+## v1.1.0 - 2026-09-22
 
 ### 修复
 
