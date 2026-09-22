@@ -87,6 +87,12 @@ final class IntegrationSuite
             'object_path_map from packme.ini overrides the built-in mapping' => function (): void {
                 $this->testObjectPathMapFromIni();
             },
+            'language defaults to English' => function (): void {
+                $this->testLanguageDefaultsToEnglish();
+            },
+            'lang=zh switches prompts to Chinese' => function (): void {
+                $this->testLanguageConfigSwitchesToChinese();
+            },
         ];
 
         foreach ($tests as $name => $test) {
@@ -282,7 +288,7 @@ final class IntegrationSuite
 
         $run = $this->runCommand('php vendor/bin/packme', $projectDir, "4\n");
         $this->assertSame(0, $run->exitCode, 'uncommitted pack should succeed: ' . $run->combinedOutput());
-        $this->assertContains('以下未跟踪文件不会被包含', $run->combinedOutput(), 'untracked files should be reported');
+        $this->assertContains('The following untracked files will NOT be included', $run->combinedOutput(), 'untracked files should be reported');
         $this->assertContains('app/untracked.php', $run->combinedOutput(), 'untracked file should be listed in warning');
 
         $archive = $this->findSingleArchive($projectDir, '*_NOT_COMMIT_*.tar.gz');
@@ -403,7 +409,7 @@ final class IntegrationSuite
 
         $run = $this->runCommand('php vendor/bin/packme', $projectDir, "7\ndeadbeef\n");
         $this->assertSame(1, $run->exitCode, 'an invalid commit id should exit non-zero');
-        $this->assertContains('commit id 不存在', $run->combinedOutput(), 'an invalid commit id should be reported');
+        $this->assertContains('commit id does not exist', $run->combinedOutput(), 'an invalid commit id should be reported');
         $this->assertTrue(empty(glob($projectDir . '/dist/*_ONE_COMMIT_*.tar.gz')), 'no archive should be created for an invalid commit');
     }
 
@@ -424,6 +430,43 @@ final class IntegrationSuite
         $archive = $this->findSingleArchive($projectDir, '*_NOT_COMMIT_*.tar.gz');
         $replacemeIni = $this->extractTarEntry($archive, 'replaceme.ini', $projectDir);
         $this->assertContains('object_root=/custom/target/', $replacemeIni, 'packme.ini object_path_map should override the built-in mapping');
+    }
+
+    private function testLanguageDefaultsToEnglish(): void
+    {
+        $projectDir = $this->createComposerProject('packme-test-lang-default');
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'a';\n");
+        $this->initGitRepository($projectDir, ['composer.json', 'composer.lock', 'app']);
+
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'b';\n");
+        $this->writeFile($projectDir . '/app/untracked.php', "<?php echo 'u';\n");
+
+        $run = $this->runCommand('php vendor/bin/packme', $projectDir, "4\n");
+        $this->assertSame(0, $run->exitCode, 'packing without lang config should succeed: ' . $run->combinedOutput());
+        $output = $run->combinedOutput();
+        $this->assertContains('Please select packaging method:', $output, 'menu should default to English');
+        $this->assertContains('The following untracked files will NOT be included', $output, 'messages should default to English');
+        $this->assertNotContains('请选择打包方式:', $output, 'menu should not be Chinese by default');
+    }
+
+    private function testLanguageConfigSwitchesToChinese(): void
+    {
+        $projectDir = $this->createComposerProject('packme-test-lang-zh');
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'a';\n");
+        $this->writeFile($projectDir . '/packme.ini', 'lang = zh' . PHP_EOL);
+        $this->initGitRepository($projectDir, ['composer.json', 'composer.lock', 'app', 'packme.ini']);
+
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'b';\n");
+        $this->writeFile($projectDir . '/app/untracked.php', "<?php echo 'u';\n");
+
+        $run = $this->runCommand('php vendor/bin/packme', $projectDir, "4\n");
+        $this->assertSame(0, $run->exitCode, 'packing with lang=zh should succeed: ' . $run->combinedOutput());
+        $output = $run->combinedOutput();
+        $this->assertContains('请选择打包方式:', $output, 'menu should be Chinese when lang=zh');
+        $this->assertContains('正在打包未提交的变更...', $output, 'progress messages should be Chinese when lang=zh');
+        $this->assertContains('生成文件: ', $output, 'dynamic messages should be Chinese when lang=zh');
+        $this->assertContains('以下未跟踪文件不会被包含', $output, 'untracked warning should be Chinese when lang=zh');
+        $this->assertNotContains('Please select packaging method:', $output, 'menu should not stay English when lang=zh');
     }
 
     private function createComposerProject(string $prefix): string

@@ -132,6 +132,9 @@ Please select packaging method:
 在项目根目录新建 `packme.ini`(可选), 支持以下配置:
 
 ```ini
+; 界面语言 en:英文(默认)  zh:中文(也接受 cn / zh-cn)
+lang = en
+
 ; 是否生成 ./dist/changes.txt   1:生成(默认)  0:不生成
 generate_change_txt = 1
 
@@ -144,6 +147,7 @@ report_usage = 1
 object_path_map = '{"my-project":"/srv/www/my-project/","another":"/srv/www/another/"}'
 ```
 
+- `lang` 默认 `en`(英文); 设为 `zh`(或 `cn` / `zh-cn`)后菜单、交互提示、进度与状态信息切换为中文。未识别的值一律回退英文。
 - `generate_change_txt = 0` 时不再生成/更新 `changes.txt`; 如果该文件已存在, 仍会照常打包。
 - `report_usage = 0` 或 `PACKME_REPORT_USAGE=0` 时跳过使用量上报(上报失败或超时都不会影响打包)。
 - `object_path_map` 的值包含 `{`、`"` 等字符, 必须用引号包裹(单引号或双引号均可)。

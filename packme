@@ -78,6 +78,9 @@ $replaceme_ini = new Ini($replaceme_ini_file);
 // packme.ini 可选配置
 $packme_ini = new Ini('./packme.ini');
 
+// 语言: en(默认) / zh, 见 packme.ini 的 lang 配置
+Lang::set((string)$packme_ini->get('lang', 'en'));
+
 // 项目名 -> 服务器路径: 内置映射(srun 内部约定) + packme.ini 的 object_path_map 覆盖
 $object_path_map = PACKME_OBJECT_PATH_MAP;
 $custom_path_map = json_decode((string)$packme_ini->get('object_path_map'), true);
@@ -219,18 +222,130 @@ switch ($choice) {
 // 类====================================================================
 
 /**
+ * 多语言支持: 源码统一使用英文文案(gettext 风格), lang=zh 时在输出层翻译。
+ * 可用 packme.ini 的 lang 配置切换, 默认 en(英文)。
+ */
+class Lang
+{
+    private static string $lang = 'en';
+
+    /** 精确匹配: 英文 => 中文 */
+    private static array $messages = [
+        'Please select packaging method:' => '请选择打包方式:',
+        '      [1]: Full packaging' => '      [1]: 全量打包',
+        '      [2]: Pack the most recently commit and currently not commit files' => '      [2]: 打包最近一次提交和当前未提交的文件',
+        '      [3]: Pack the difference files commit between two times' => '      [3]: 打包两次提交之间的差异文件',
+        '      [4]: Pack files that have been modified but not yet commit' => '      [4]: 打包当前已修改但未提交的文件',
+        '      [5]: Pack the most recently commit files' => '      [5]: 打包最近一次提交的文件',
+        '      [6]: Pack the last two commit files' => '      [6]: 打包最近两次提交的文件',
+        '      [7]: Pack the specified one-time commit' => '      [7]: 打包指定的某一次提交',
+        '      [8]: Pack specified branch' => '      [8]: 打包指定分支',
+        '      [9]: Pack specified path' => '      [9]: 打包指定目录或文件',
+        'Your choice (default [5]):' => '请输入选项(默认 [5]):',
+        'Please enter new commit id(<=) (default:HEAD):' => '请输入新 commit id(<=) (默认:HEAD):',
+        'Please enter old commit id(>) (default:HEAD~1):' => '请输入旧 commit id(>) (默认:HEAD~1):',
+        'Please enter the commit id:' => '请输入 commit id:',
+        'Please enter the branch name(default:current branch):' => '请输入分支名(默认:当前分支):',
+        'Please enter the path to be packaged:' => '请输入要打包的路径:',
+        'Packing vendor? (It will take a long time for y) (y/n) (default:n): ' => '是否打包 vendor? (选 y 会比较慢) (y/n) (默认:n): ',
+        "If you have any instructions about this installation package, please write them in advance './dist/changes.txt'" => "如果本次安装包有说明, 请提前写入 './dist/changes.txt'",
+        'Packing last commit and current changes...' => '正在打包最近一次提交和当前未提交的变更...',
+        'Packing last commit...' => '正在打包最近一次提交...',
+        'Packing last two commits...' => '正在打包最近两次提交...',
+        'Packing uncommitted changes...' => '正在打包未提交的变更...',
+        'Packing changes between commits...' => '正在打包两次提交之间的差异...',
+        'Packing specific commit...' => '正在打包指定的某一次提交...',
+        'Packing branch changes...' => '正在打包分支变更...',
+        'Packing main files...' => '正在打包主要文件...',
+        'Packing vendor files...' => '正在打包 vendor 文件...',
+        'Compressing files...' => '正在压缩文件...',
+        'Packing files...' => '正在打包文件...',
+        'Begin packing...' => '开始打包...',
+        'Packing vendor finished' => 'vendor 打包完成',
+        'Packing finished' => '打包完成',
+        'Generate version...' => '生成版本信息...',
+        'Update version succeed' => '版本信息更新成功',
+        'Update version failed!' => '版本信息更新失败!',
+        'Not found any commit' => '未找到任何提交',
+        'Path cannot be empty' => '路径不能为空',
+        'Path not exists' => '路径不存在',
+        'Your input is incorrect, please re-enter' => '输入有误, 请重新输入',
+        'Cmd temporarily does not support, Please execute manually in powershell' => '命令暂不支持, 请在 powershell 中手动执行',
+        'commit id cannot be empty' => 'commit id 不能为空',
+        'The following untracked files will NOT be included, run git add first if needed:' => '以下未跟踪文件不会被包含, 如需打包请先执行 git add:',
+        'Failed to get changed files' => '获取变更文件列表失败',
+        'No changed files found, packaging stopped' => '没有发现变更文件, 已停止打包',
+        'No valid changed files found, packaging stopped' => '没有发现有效的变更文件, 已停止打包',
+        'Failed to create temporary git index' => '创建临时 git index 失败',
+        'Failed to init temporary git index' => '初始化临时 git index 失败',
+        'Failed to write temporary tree' => '写入临时 tree 失败',
+    ];
+
+    /** 前缀匹配: 英文前缀 => 中文前缀(用于带动态内容的消息) */
+    private static array $prefixes = [
+        'Generated File: ' => '生成文件: ',
+        'Generate file: ' => '生成文件: ',
+        'Change file exists: ' => '说明文件已存在: ',
+        'Change file contents is empty: ' => '说明文件内容为空: ',
+        'Readme file not exists: ' => 'README 文件不存在: ',
+        'command exec failed: ' => '命令执行失败: ',
+        'Compress tar failed: ' => '压缩失败: ',
+        'Create tar failed: ' => '创建 tar 失败: ',
+        'Add files to tar failed: ' => '写入 tar 失败: ',
+        'Packing vendor failed: ' => 'vendor 打包失败: ',
+        'Failed to add file to temporary index: ' => '写入临时 git index 失败: ',
+        'commit id does not exist or is not a commit: ' => 'commit id 不存在或不是一次提交: ',
+        'Branch: ' => '分支: ',
+        'Version: ' => '版本: ',
+    ];
+
+    /**
+     * 设置语言, 非中文一律回退到英文
+     * @param string $lang
+     * @return void
+     */
+    public static function set(string $lang): void
+    {
+        $lang = strtolower(trim($lang));
+        self::$lang = in_array($lang, ['zh', 'cn', 'zh-cn', 'zh_cn', 'chinese'], true) ? 'zh' : 'en';
+    }
+
+    public static function get(): string
+    {
+        return self::$lang;
+    }
+
+    /**
+     * 翻译一条消息(未命中则原样返回)
+     * @param string $msg
+     * @return string
+     */
+    public static function translate(string $msg): string
+    {
+        if (self::$lang === 'en' || $msg === '') return $msg;
+        if (isset(self::$messages[$msg])) return self::$messages[$msg];
+        foreach (self::$prefixes as $en => $zh) {
+            if (strpos($msg, $en) === 0) return $zh . substr($msg, strlen($en));
+        }
+        return $msg;
+    }
+}
+
+/**
  * 命令行输出与字符串工具(内置实现, 不依赖第三方库)
  */
 class Func
 {
     public static function logInfo(string $msg = '', bool $wrap = true)
     {
+        $msg = Lang::translate($msg);
         if ($wrap) $msg .= PHP_EOL;
         echo $msg;
     }
 
     public static function logPrimary(string $msg = '', bool $wrap = true)
     {
+        $msg = Lang::translate($msg);
         $msg = "\033[34m $msg \033[0m";
         if ($wrap) $msg .= PHP_EOL;
         echo $msg;
@@ -238,6 +353,7 @@ class Func
 
     public static function logWarn(string $msg = '', bool $wrap = true)
     {
+        $msg = Lang::translate($msg);
         $msg = "\033[33m $msg \033[0m";
         if ($wrap) $msg .= PHP_EOL;
         echo $msg;
@@ -245,6 +361,7 @@ class Func
 
     public static function logError(string $msg = '', bool $wrap = true)
     {
+        $msg = Lang::translate($msg);
         $msg = "\033[41m $msg \033[0m";
         if ($wrap) $msg .= PHP_EOL;
         echo $msg;
@@ -252,6 +369,7 @@ class Func
 
     public static function logSuccess(string $msg = '', bool $wrap = true)
     {
+        $msg = Lang::translate($msg);
         $msg = "\033[32m $msg \033[0m";
         if ($wrap) $msg .= PHP_EOL;
         echo $msg;
@@ -695,7 +813,7 @@ class Git
         }
 
         if ($untracked) {
-            Func::logWarn('以下未跟踪文件不会被包含, 如需打包请先执行 git add:');
+            Func::logWarn('The following untracked files will NOT be included, run git add first if needed:');
             foreach ($untracked as $file) {
                 Func::logWarn('  ' . $file);
             }
@@ -940,7 +1058,7 @@ class ProgressBar
     public function __construct($total = 100, $message = '')
     {
         $this->total = $total;
-        $this->message = $message;
+        $this->message = Lang::translate((string)$message);
         $this->startTime = microtime(true);
     }
 
@@ -952,7 +1070,7 @@ class ProgressBar
 
     public function setMessage($message)
     {
-        $this->message = $message;
+        $this->message = Lang::translate((string)$message);
         $this->display();
     }
 
@@ -1041,7 +1159,7 @@ packme $version - 一键打包项目变更并生成可部署压缩包
   [9] 指定的目录或文件
 
 配置:
-  packme.ini    generate_change_txt / report_usage / object_path_map
+  packme.ini    lang / generate_change_txt / report_usage / object_path_map
   replaceme.ini object_root / ignore_dir_prefix 等
 
 TXT;
@@ -1091,7 +1209,7 @@ function resolveCommitId(string $input, string $default = ''): string
     $input = trim($input);
     if ($input === '') $input = $default;
     if ($input === '') {
-        Func::logError('commit id 不能为空');
+        Func::logError('commit id cannot be empty');
         return '';
     }
 
@@ -1100,7 +1218,7 @@ function resolveCommitId(string $input, string $default = ''): string
     $code = 0;
     exec('git rev-parse --verify --quiet ' . escapeshellarg($input . '^{commit}') . ' 2>' . $null, $output, $code);
     if ($code !== 0) {
-        Func::logError('commit id 不存在或不是一次提交: ' . $input);
+        Func::logError('commit id does not exist or is not a commit: ' . $input);
         return '';
     }
     return $input;
