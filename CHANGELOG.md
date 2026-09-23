@@ -2,6 +2,33 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## Unreleased
+
+### 新增
+
+- **AI 打包(模式 0)**: 与 DeepSeek 多轮对话, AI 先读仓库(分支/提交/变更文件/diff),
+  给出打包计划, **人工确认后**才执行; 执行完由 AI 做确定性校验并说明做了什么、下一步怎么部署。
+- 新增 `lib/`: `PackRunner.php`(打包流程可调用化)、`HttpClient.php`、`AiClient.php`(含 SSE 流式与
+  tool_calls 累加)、`AiAgent.php`(对话循环/工具派发/计划确认/校验/总结)。
+- `packme.ini` 新增 AI 配置: `ai_api_key` / `ai_base_url` / `ai_model` / `ai_send_diff` /
+  `ai_max_diff_bytes` / `ai_max_turns` / `ai_stream` / `ai_temperature` / `ai_session_log`;
+  密钥优先读取环境变量 `DEEPSEEK_API_KEY`。
+- `PackmeRunner::verifyArchive()`: 压缩包确定性校验(必需文件、期望文件、可疑成员路径、内容比对)。
+- `composer build-phar` 与 Release 附件现在包含 `lib/`, phar 内同样可用 AI 打包。
+
+### 变更
+
+- 打包流程由顶层 `switch` 重构为 `PackmeRunner::run(mode, opts)`, 交互菜单与 AI 共用同一实现;
+  失败时返回结构化结果而非直接 `exit()`。
+- `packPath()` / `fullPack()` 支持参数化(不再只能交互输入), 便于程序化调用与测试。
+- 菜单新增 `[0]: AI packaging`; `lang=zh` 时 AI 对话与提示均为中文。
+
+### 测试
+
+- 单元测试新增: AI 客户端非流式解析、流式解析(内容与 tool_calls 跨块累加)、API 错误处理、
+  `verifyArchive` 缺失文件检测。
+- 集成测试新增: 本地 DeepSeek 桩服务驱动的端到端 AI 打包(工具调用 → 计划 → 确认 → 打包 → 校验 → 总结)。
+
 ## v1.1.2 - 2026-09-22
 
 ### 新增

@@ -63,6 +63,18 @@ final class UnitSuite
             'replaceme --rollback --dry-run is rejected' => function (): void {
                 $this->testRollbackDryRunRejected();
             },
+            'ai client parses non-stream tool calls' => function (): void {
+                $this->testAiClientNonStream();
+            },
+            'ai client parses streamed content and tool calls' => function (): void {
+                $this->testAiClientStream();
+            },
+            'ai client surfaces API errors' => function (): void {
+                $this->testAiClientError();
+            },
+            'verifyArchive detects missing files' => function (): void {
+                $this->testVerifyArchive();
+            },
         ];
 
         foreach ($tests as $name => $test) {
@@ -174,6 +186,140 @@ final class UnitSuite
         $run = $this->runCommand('php ./replaceme --rollback --dry-run', $packageDir, $target . "\n");
         $this->assertTrue($run->exitCode !== 0, 'rollback dry-run should fail fast');
         $this->assertContains('回滚操作暂不支持 --dry-run', $run->combinedOutput(), 'rollback dry-run should be reported as unsupported');
+    }
+
+    private function loadLib(): void
+    {
+        require_once $this->repoRoot . '/lib/HttpClient.php';
+        require_once $this->repoRoot . '/lib/AiClient.php';
+        require_once $this->repoRoot . '/lib/PackRunner.php';
+    }
+
+    private function testAiClientNonStream(): void
+    {
+        $this->loadLib();
+        $transport = function ($url, $payload, $headers, $onChunk) {
+            return ['status' => 200, 'error' => '', 'body' => (string)json_encode([
+                'choices' => [[
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => null,
+                        'tool_calls' => [[
+                            'id' => 'call_1',
+                            'type' => 'function',
+                            'function' => ['name' => 'get_repo_context', 'arguments' => '{}'],
+                        ]],
+                    ],
+                    'finish_reason' => 'tool_calls',
+                ]],
+                'usage' => ['prompt_tokens' => 3, 'completion_tokens' => 4, 'total_tokens' => 7],
+            ])];
+        };
+
+        $client = new PackmeAiClient(['api_key' => 'k', 'stream' => false], $transport);
+        $response = $client->chat([['role' => 'user', 'content' => 'hi']]);
+
+        $this->assertSame('get_repo_context', $response['tool_calls'][0]['function']['name'], 'tool name should be parsed');
+        $this->assertSame('call_1', $response['tool_calls'][0]['id'], 'tool id should be parsed');
+        $this->assertSame(7, $client->usage()['total_tokens'], 'usage should be accumulated');
+    }
+
+    private function testAiClientStream(): void
+    {
+        $this->loadLib();
+        $chunks = [
+            ['choices' => [['delta' => ['content' => 'Hel']]]],
+            ['choices' => [['delta' => ['content' => 'lo']]]],
+            ['choices' => [['delta' => ['tool_calls' => [['index' => 0, 'id' => 'c9', 'function' => ['name' => 'git_diff', 'arguments' => '{"files":']]]]]]],
+            ['choices' => [['delta' => ['tool_calls' => [['index' => 0, 'function' => ['arguments' => '["a.php"]}']]]]]]],
+            ['choices' => [['delta' => [], 'finish_reason' => 'tool_calls']], 'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 2, 'total_tokens' => 3]],
+        ];
+        $sse = '';
+        foreach ($chunks as $chunk) $sse .= 'data: ' . json_encode($chunk) . "\n\n";
+        $sse .= "data: [DONE]\n\n";
+
+        $transport = function ($url, $payload, $headers, $onChunk) use ($sse) {
+            // 故意拆块, 验证跨块缓冲
+            foreach (str_split($sse, 17) as $piece) $onChunk($piece);
+            return ['status' => 200, 'error' => '', 'body' => ''];
+        };
+
+        $client = new PackmeAiClient(['api_key' => 'k', 'stream' => true], $transport);
+        $deltas = '';
+        $response = $client->chat([['role' => 'user', 'content' => 'hi']], [], function ($delta) use (&$deltas) {
+            $deltas .= $delta;
+        });
+
+        $this->assertSame('Hello', $response['content'], 'streamed content should be concatenated');
+        $this->assertSame('Hello', $deltas, 'onDelta should receive each content delta');
+        $this->assertSame('git_diff', $response['tool_calls'][0]['function']['name'], 'streamed tool name should accumulate');
+        $this->assertSame('{"files":["a.php"]}', $response['tool_calls'][0]['function']['arguments'], 'streamed tool arguments should accumulate across chunks');
+        $this->assertSame(3, $client->usage()['total_tokens'], 'streamed usage should be captured');
+    }
+
+    private function testAiClientError(): void
+    {
+        $this->loadLib();
+        $transport = function ($url, $payload, $headers, $onChunk) {
+            return ['status' => 401, 'error' => '', 'body' => (string)json_encode(['error' => ['message' => 'bad key']])];
+        };
+
+        $client = new PackmeAiClient(['api_key' => 'k', 'stream' => false], $transport);
+        try {
+            $client->chat([['role' => 'user', 'content' => 'hi']]);
+            $this->assertTrue(false, 'an API error should throw');
+        } catch (PackmeAiException $e) {
+            $this->assertContains('401', $e->getMessage(), 'error should include the HTTP status');
+            $this->assertContains('bad key', $e->getMessage(), 'error should include the API message');
+        }
+    }
+
+    private function testVerifyArchive(): void
+    {
+        $this->loadLib();
+        $dir = $this->createTempDir('unit-verify-');
+
+        $good = $dir . '/good.tar.gz';
+        $this->buildTar($good, [
+            'replaceme' => "#!/usr/bin/env php\n",
+            'replaceme5' => "#!/usr/bin/env php\n",
+            'replaceme.ini' => "object_root=/tmp/\n",
+            'app/a.php' => "<?php echo 'x';\n",
+        ]);
+        $bad = $dir . '/bad.tar.gz';
+        $this->buildTar($bad, ['app/a.php' => "<?php echo 'x';\n"]);
+
+        $okResult = PackmeRunner::verifyArchive($good, ['app/a.php'], $dir, false);
+        $this->assertTrue($okResult['ok'], 'complete archive should verify: ' . implode('; ', $okResult['errors']));
+        $this->assertTrue(in_array('app/a.php', $okResult['members'], true), 'members should include the packaged file');
+
+        $badResult = PackmeRunner::verifyArchive($bad, ['app/a.php'], $dir, false);
+        $this->assertTrue(!$badResult['ok'], 'archive without replaceme files should fail verification');
+
+        $missingResult = PackmeRunner::verifyArchive($good, ['not-there.php'], $dir, false);
+        $this->assertTrue(!$missingResult['ok'], 'missing expected file should fail verification');
+    }
+
+    private function buildTar(string $path, array $files): void
+    {
+        $tar = (string)preg_replace('/\.gz$/', '', $path);
+        @unlink($tar);
+        @unlink($path);
+
+        $archive = new PharData($tar);
+        foreach ($files as $name => $content) {
+            $archive->addFromString($name, $content);
+        }
+        unset($archive);
+
+        $in = fopen($tar, 'rb');
+        $out = gzopen($path, 'wb');
+        while (!feof($in)) {
+            gzwrite($out, (string)fread($in, 8192));
+        }
+        fclose($in);
+        gzclose($out);
+        @unlink($tar);
     }
 
     private function runCommand(string $command, string $cwd, string $input = ''): UnitCommandResult

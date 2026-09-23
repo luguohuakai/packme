@@ -14,6 +14,9 @@
     "ext-phar": "*"
   },
   "license": "MIT",
+  "suggest": {
+    "ext-curl": "AI 打包模式推荐安装, 用于流式调用 DeepSeek; 缺失时回退 stream 封装"
+  },
   "authors": [
     {
       "name": "DM",

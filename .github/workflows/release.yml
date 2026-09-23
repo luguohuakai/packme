@@ -28,6 +28,10 @@ jobs:
           php -l replaceme
           php -l replaceme5
           php -l build-phar.php
+          php -l lib/PackRunner.php
+          php -l lib/HttpClient.php
+          php -l lib/AiClient.php
+          php -l lib/AiAgent.php
 
       - name: Build phar
         run: php -d phar.readonly=0 build-phar.php packme.phar

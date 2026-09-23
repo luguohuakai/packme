@@ -50,6 +50,10 @@ jobs:
           php -l replaceme
           php -l replaceme5
           php -l build-phar.php
+          php -l lib/PackRunner.php
+          php -l lib/HttpClient.php
+          php -l lib/AiClient.php
+          php -l lib/AiAgent.php
           php -l tests/integration.php
           php -l tests/unit.php
 

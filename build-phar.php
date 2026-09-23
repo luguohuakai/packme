@@ -54,6 +54,11 @@ try {
         }
     }
 
+    // 打包执行器与 AI 模块
+    foreach (glob($root . '/lib/*.php') as $libFile) {
+        $phar->addFile($libFile, 'lib/' . basename($libFile));
+    }
+
     $phar->setStub(
         "#!/usr/bin/env php\n" .
         "<?php\n" .

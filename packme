@@ -51,6 +51,17 @@ if (in_array('--help', $cli_args, true)) {
     exit(0);
 }
 
+// 加载打包执行器与 AI 模块(AI 为可选能力, 缺少时其余功能不受影响)
+foreach (['PackRunner.php', 'HttpClient.php', 'AiClient.php', 'AiAgent.php'] as $packmeLib) {
+    $packmeLibFile = __DIR__ . '/lib/' . $packmeLib;
+    if (is_file($packmeLibFile)) require_once $packmeLibFile;
+}
+if (!class_exists('PackmeRunner')) {
+    fwrite(STDERR, 'lib/PackRunner.php 缺失, 请使用完整的发布包(或从 Release 下载 packme.phar)' . PHP_EOL);
+    exit(1);
+}
+$has_ai = class_exists('PackmeAiAgent') && class_exists('PackmeAiClient');
+
 Func::logInfo('PACKME ' . PACKME_VERSION . ' POWERED BY LUGUOHUAKAI');
 Func::logInfo();
 
@@ -116,51 +127,44 @@ Func::logInfo('      [6]: Pack the last two commit files');
 Func::logInfo('      [7]: Pack the specified one-time commit');
 Func::logInfo('      [8]: Pack specified branch');
 Func::logInfo('      [9]: Pack specified path');
+if ($has_ai) Func::logInfo('      [0]: AI packaging (chat with AI, confirm, then pack)');
 Func::logPrimary('Your choice (default [5]):', false);
 choice:
 $choice = trim(fgets(STDIN));
 if ($choice == '') $choice = 5;
 $time = date('ymdHis');
-$last_hash = strtoupper($git->hashShort());
+$runner = new PackmeRunner($git, $object_name, $version_file, $time);
+
+// AI 打包: 进入与 AI 的对话, 用户确认后执行, 执行完由 AI 校验并说明后续步骤
+if ($choice === '0') {
+    if (!$has_ai) {
+        Func::logError('AI packaging is unavailable: lib/AiAgent.php is missing');
+        goto choice;
+    }
+    $agent = new PackmeAiAgent([
+        'git' => $git,
+        'runner' => $runner,
+        'objectName' => $object_name,
+        'versionFile' => $version_file,
+        'packmeIni' => $packme_ini,
+        'replacemeIni' => $replaceme_ini,
+        'lang' => Lang::get(),
+    ]);
+    exit($agent->run());
+}
 
 // 具体打包操作====================================================================
+$result = null;
 switch ($choice) {
+    case 1:
+        $result = $runner->run(1);
+        break;
     case 2:
-        $progress = new ProgressBar(100, "Packing last commit and current changes...");
-        $file = "{$object_name}_LAST2NOW_{$time}_$last_hash.tar.gz";
-        genVersion($version_file, $time, $git);
-        $rs = $git->output($file)->newCommit('NOW')->oldCommit('HEAD~1')->setProgressBar($progress)->run();
-        if ($rs === null) exit(1);
-        Func::logInfo($rs);
-        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        exit(0);
-    case 5:
-        $progress = new ProgressBar(100, "Packing last commit...");
-        $file = "{$object_name}_LAST1COMMIT_{$time}_$last_hash.tar.gz";
-        genVersion($version_file, $time, $git);
-        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~1')->setProgressBar($progress)->run();
-        if ($rs === null) exit(1);
-        if ($rs) Func::logInfo($rs);
-        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        exit(0);
-    case 6:
-        $progress = new ProgressBar(100, "Packing last two commits...");
-        $file = "{$object_name}_LAST2COMMIT_{$time}_$last_hash.tar.gz";
-        genVersion($version_file, $time, $git);
-        $rs = $git->output($file)->newCommit('HEAD')->oldCommit('HEAD~2')->setProgressBar($progress)->run();
-        if ($rs === null) exit(1);
-        Func::logInfo($rs);
-        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        exit(0);
     case 4:
-        $progress = new ProgressBar(100, "Packing uncommitted changes...");
-        $file = "{$object_name}_NOT_COMMIT_{$time}_$last_hash.tar.gz";
-        genVersion($version_file, $time, $git);
-        $rs = $git->output($file)->newCommit('NOW')->setProgressBar($progress)->run();
-        if ($rs === null) exit(1);
-        Func::logInfo($rs);
-        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        exit(0);
+    case 5:
+    case 6:
+        $result = $runner->run((int)$choice);
+        break;
     case 3:
         Func::logInfo('Please enter new commit id(<=) (default:HEAD):', false);
         $new = resolveCommitId(trim(fgets(STDIN)), 'HEAD');
@@ -168,59 +172,32 @@ switch ($choice) {
         Func::logInfo('Please enter old commit id(>) (default:HEAD~1):', false);
         $old = resolveCommitId(trim(fgets(STDIN)), 'HEAD~1');
         if ($old === '') exit(1);
-        $_new = strtoupper($new);
-        $_old = strtoupper($old);
-        $progress = new ProgressBar(100, "Packing changes between commits...");
-        $file = "{$object_name}_2COMMIT_{$time}_{$_new}_$_old.tar.gz";
-        genVersion($version_file, $time, $git);
-        $rs = $git->output($file)->newCommit($new)->oldCommit($old)->setProgressBar($progress)->run();
-        if ($rs === null) exit(1);
-        Func::logInfo($rs);
-        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        exit(0);
+        $result = $runner->run(3, ['new' => $new, 'old' => $old]);
+        break;
     case 7:
         Func::logInfo('Please enter the commit id:', false);
         $new = resolveCommitId(trim(fgets(STDIN)));
         if ($new === '') exit(1);
-        $_new = strtoupper($new);
-        $progress = new ProgressBar(100, "Packing specific commit...");
-        $file = "{$object_name}_ONE_COMMIT_{$time}_$_new.tar.gz";
-        genVersion($version_file, $time, $git);
-        $rs = $git->output($file)->newCommit($new)->oldCommit($new . '~')->setProgressBar($progress)->run();
-        if ($rs === null) exit(1);
-        Func::logInfo($rs);
-        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        exit(0);
+        $result = $runner->run(7, ['new' => $new]);
+        break;
     case 8:
         Func::logInfo('Please enter the branch name(default:current branch):', false);
-        $branch = trim(fgets(STDIN));
-        $rs = $git->branchCommitId($branch);
-        if (empty($rs)) {
-            Func::logError('Not found any commit');
-            exit(1);
-        }
-        $new = $rs[0];
-        $_new = strtoupper($new);
-        $old = $rs[1];
-        $_old = strtoupper($old);
-        $progress = new ProgressBar(100, "Packing branch changes...");
-        $file = "{$object_name}_BRANCH_{$time}_{$_new}_$_old.tar.gz";
-        genVersion($version_file, $time, $git);
-        $rs = $git->output($file)->newCommit($new)->oldCommit($old)->setProgressBar($progress)->run();
-        if ($rs === null) exit(1);
-        Func::logInfo($rs);
-        Func::logPrimary('Generated File: ' . $git->getOutPutFile());
-        exit(0);
+        $result = $runner->run(8, ['branch' => trim(fgets(STDIN))]);
+        break;
     case 9: // 仅打包指定目录 不生成版本信息
-        $file = "./dist/{$object_name}_PATH_$time.tar.gz";
-        exit(packPath($file) ? 0 : 1);
-    case 1:
-        $version = genVersion($version_file, $time, $git);
-        exit(fullPack($git, $object_name, $version, $version_file) ? 0 : 1);
+        $result = $runner->run(9);
+        break;
     default:
         Func::logError('Your input is incorrect, please re-enter');
         goto choice;
 }
+
+if (!is_array($result) || empty($result['ok'])) {
+    $error = is_array($result) ? (string)($result['error'] ?? '') : '';
+    if ($error !== '') Func::logError($error);
+    exit(1);
+}
+exit(0);
 
 // 类====================================================================
 
@@ -495,6 +472,9 @@ class Git
     public string $cmd = '';
     private ?string $prepare_error = null;
 
+    // 最近一次真正进入压缩包的变更文件(供 AI 校验/汇报使用)
+    public array $packed_files = [];
+
     private ?ProgressBar $progressBar = null;
 
     public function setProgressBar(ProgressBar $progressBar): Git
@@ -638,6 +618,7 @@ class Git
             return '';
         }
 
+        $this->packed_files = $files;
         $tree = $this->createTreeFromWorktree($files);
         return $tree ?? '';
     }
@@ -664,6 +645,8 @@ class Git
             $this->prepare_error = 'No valid changed files found, packaging stopped';
             return '';
         }
+
+        $this->packed_files = $files;
 
         // 每个文件路径单独转义，避免特殊字符和中文编码问题
         $pathspecs = '';
@@ -1257,76 +1240,86 @@ function releaseBundledFile(string $path): string
 /**
  * 根据目录进行打包
  * @param string $file 生成的文件路径
+ * @param string|null $path 要打包的目录/文件; 为 null 时交互式询问
  * @return bool
  */
-function packPath(string $file): bool
+function packPath(string $file, $path = null): bool
 {
     Func::logPrimary("If you have any instructions about this installation package, please write them in advance './dist/changes.txt'");
-    input:
-    Func::logInfo('Please enter the path to be packaged:', false);
-    $path = trim(fgets(STDIN));
-    if ($path == '') {
-        Func::logError('Path cannot be empty');
-        goto input;
-    } else if (!is_dir($path) && !is_file($path)) {
-        Func::logError('Path not exists');
-        goto input;
+    if ($path === null) {
+        input:
+        Func::logInfo('Please enter the path to be packaged:', false);
+        $path = trim(fgets(STDIN));
+        if ($path == '') {
+            Func::logError('Path cannot be empty');
+            goto input;
+        }
+        if (!is_dir($path) && !is_file($path)) {
+            Func::logError('Path not exists');
+            goto input;
+        }
     } else {
-        $tar_file = str_replace('.gz', '', $file);
-        @unlink($tar_file);
-        try {
-            $tar = new PharData($tar_file);
-        } catch (Throwable $e) {
-            Func::logError('Create tar failed: ' . $e->getMessage());
+        $path = trim((string)$path);
+        if ($path === '' || (!is_dir($path) && !is_file($path))) {
+            Func::logError('Path not exists');
             return false;
         }
-
-        try {
-            $archivePath = getArchiveMemberPath($path);
-            addToArchive($tar, $path, $archivePath);
-            $dir = getArchiveDirectoryPrefix($path);
-
-            // 指定项目根路径
-            global $replaceme_ini;
-            $replaceme_ini->set('object_root', '/srun3/www/');
-
-            if (is_file('replaceme.ini')) addToArchive($tar, 'replaceme.ini', $dir . 'replaceme.ini');
-            global $replaceme, $replaceme5;
-            $r = str_replace('./', '', $replaceme);
-            $r5 = str_replace('./', '', $replaceme5);
-            if (is_file('replaceme')) addToArchive($tar, 'replaceme', $dir . 'replaceme');
-            if (is_file($r)) addToArchive($tar, $r, $dir . 'replaceme');
-            if (is_file('replaceme5')) addToArchive($tar, 'replaceme5', $dir . 'replaceme5');
-            if (is_file($r5)) addToArchive($tar, $r5, $dir . 'replaceme5');
-            if (is_file('dist/changes.txt')) {
-                $filePath = getRelativeFilePathsInSpecifyDirectory($path);
-                if ($filePath) {
-                    $content = "\nChange Files\n";
-                    $content .= implode("\n", $filePath);
-                    file_put_contents('dist/changes.txt', $content, FILE_APPEND);
-                }
-                addToArchive($tar, 'dist/changes.txt', $dir . 'changes.txt');
-            }
-        } catch (Throwable $e) {
-            Func::logError('Add files to tar failed: ' . $e->getMessage());
-            unset($tar);
-            @unlink($tar_file);
-            return false;
-        }
-
-        // PharData 需要先释放对象, 写入才会真正落盘
-        unset($tar);
-
-        if (!gzipFile($tar_file, $file)) {
-            Func::logError("Compress tar failed: $tar_file");
-            @unlink($tar_file);
-            return false;
-        }
-        @unlink($tar_file);
-
-        Func::logPrimary('Generated File: ' . $file);
-        return true;
     }
+
+    $tar_file = str_replace('.gz', '', $file);
+    @unlink($tar_file);
+    try {
+        $tar = new PharData($tar_file);
+    } catch (Throwable $e) {
+        Func::logError('Create tar failed: ' . $e->getMessage());
+        return false;
+    }
+
+    try {
+        $archivePath = getArchiveMemberPath($path);
+        addToArchive($tar, $path, $archivePath);
+        $dir = getArchiveDirectoryPrefix($path);
+
+        // 指定项目根路径
+        global $replaceme_ini;
+        $replaceme_ini->set('object_root', '/srun3/www/');
+
+        if (is_file('replaceme.ini')) addToArchive($tar, 'replaceme.ini', $dir . 'replaceme.ini');
+        global $replaceme, $replaceme5;
+        $r = str_replace('./', '', $replaceme);
+        $r5 = str_replace('./', '', $replaceme5);
+        if (is_file('replaceme')) addToArchive($tar, 'replaceme', $dir . 'replaceme');
+        if (is_file($r)) addToArchive($tar, $r, $dir . 'replaceme');
+        if (is_file('replaceme5')) addToArchive($tar, 'replaceme5', $dir . 'replaceme5');
+        if (is_file($r5)) addToArchive($tar, $r5, $dir . 'replaceme5');
+        if (is_file('dist/changes.txt')) {
+            $filePath = getRelativeFilePathsInSpecifyDirectory($path);
+            if ($filePath) {
+                $content = "\nChange Files\n";
+                $content .= implode("\n", $filePath);
+                file_put_contents('dist/changes.txt', $content, FILE_APPEND);
+            }
+            addToArchive($tar, 'dist/changes.txt', $dir . 'changes.txt');
+        }
+    } catch (Throwable $e) {
+        Func::logError('Add files to tar failed: ' . $e->getMessage());
+        unset($tar);
+        @unlink($tar_file);
+        return false;
+    }
+
+    // PharData 需要先释放对象, 写入才会真正落盘
+    unset($tar);
+
+    if (!gzipFile($tar_file, $file)) {
+        Func::logError("Compress tar failed: $tar_file");
+        @unlink($tar_file);
+        return false;
+    }
+    @unlink($tar_file);
+
+    Func::logPrimary('Generated File: ' . $file);
+    return true;
 }
 
 /**
@@ -1491,15 +1484,18 @@ function gzipFile(string $source, string $destination): bool
  * @param $object_name
  * @param $version
  * @param $version_file
+ * @param bool|null $includeVendor 是否包含 vendor; 为 null 时交互式询问
  * @return bool
  */
-function fullPack(Git $git, $object_name, $version, $version_file): bool
+function fullPack(Git $git, $object_name, $version, $version_file, $includeVendor = null): bool
 {
-    Func::logPrimary('Packing vendor? (It will take a long time for y) (y/n) (default:n): ', false);
-    $answer = trim(fgets(STDIN));
+    if ($includeVendor === null) {
+        Func::logPrimary('Packing vendor? (It will take a long time for y) (y/n) (default:n): ', false);
+        $includeVendor = (trim(fgets(STDIN)) == 'y');
+    }
     Func::logInfo("Begin packing...");
 
-    if ($answer == 'y') {
+    if ($includeVendor) {
         $progress = new ProgressBar(100, "Packing main files...");
 
         // 打包主要文件

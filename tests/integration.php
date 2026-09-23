@@ -96,6 +96,9 @@ final class IntegrationSuite
             'phar builds and packs standalone' => function (): void {
                 $this->testPharBuildAndRun();
             },
+            'AI packaging talks to a stub model, confirms and verifies' => function (): void {
+                $this->testAiPackagingWithStubServer();
+            },
         ];
 
         foreach ($tests as $name => $test) {
@@ -503,6 +506,83 @@ final class IntegrationSuite
             'class Rollback',
             $this->extractTarEntry($archive, 'replaceme', $projectDir),
             'bundled replaceme should be the real script, not a renamed temp file'
+        );
+    }
+
+    private function freePort(): int
+    {
+        $server = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        if ($server === false) return 8912;
+        $name = (string)stream_socket_get_name($server, false);
+        fclose($server);
+        $port = (int)substr($name, strrpos($name, ':') + 1);
+        return $port > 0 ? $port : 8912;
+    }
+
+    private function testAiPackagingWithStubServer(): void
+    {
+        $projectDir = $this->createTempDir('packme-test-ai-');
+        $port = $this->freePort();
+
+        // 固定顺序的 DeepSeek 桩: 上下文 -> 变更文件 -> 提议计划 -> 收尾
+        $router = <<<'PHP'
+<?php
+$countFile = '__COUNT__';
+$n = (int)@file_get_contents($countFile) + 1;
+@file_put_contents($countFile, (string)$n);
+function tc($id, $name, $args) { return ['id'=>$id,'type'=>'function','function'=>['name'=>$name,'arguments'=>json_encode($args)]]; }
+function resp($toolCalls = null, $content = null) {
+    $message = ['role'=>'assistant','content'=>$content];
+    if ($toolCalls) $message['tool_calls'] = $toolCalls;
+    return ['choices'=>[['message'=>$message,'finish_reason'=>$toolCalls?'tool_calls':'stop']],'usage'=>['prompt_tokens'=>10,'completion_tokens'=>5,'total_tokens'=>15]];
+}
+$map = [
+  1 => resp([tc('c1','get_repo_context', new stdClass())]),
+  2 => resp([tc('c2','git_changed_files', ['mode'=>'uncommitted'])]),
+  3 => resp([tc('c3','propose_pack_plan', ['mode'=>4,'reason'=>'pack uncommitted changes'])]),
+  4 => resp([tc('c4','finish', ['summary'=>'packed uncommitted changes','next_steps'=>'unzip and run php ./replaceme'])]),
+];
+header('Content-Type: application/json');
+echo json_encode($map[$n] ?? resp(null, 'done'));
+PHP;
+        $this->writeFile($projectDir . '/router.php', str_replace('__COUNT__', $projectDir . '/ai_count', $router));
+
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'head';\n");
+        $this->writeFile($projectDir . '/packme.ini', implode("\n", [
+            'ai_api_key = test-key',
+            'ai_base_url = http://127.0.0.1:' . $port,
+            'ai_model = stub',
+            'ai_stream = 0',
+            'ai_session_log = 0',
+            'ai_send_diff = 0',
+        ]) . "\n");
+        $this->initGitRepository($projectDir, ['app', 'packme.ini']);
+        $this->writeFile($projectDir . '/app/a.php', "<?php echo 'worktree';\n");
+        $this->writeFile($projectDir . '/answer.txt', "0\n把未提交的改动打包\ny\n");
+
+        $script = '#!/bin/sh' . "\n"
+            . 'php -S 127.0.0.1:' . $port . ' router.php > server.log 2>&1 &' . "\n"
+            . 'SRV=$!' . "\n"
+            . 'i=0; while [ $i -lt 40 ]; do php -r \'$c=@fsockopen("127.0.0.1", ' . $port . '); if($c){fclose($c);exit(0);} exit(1);\' && break; i=$((i+1)); sleep 1; done' . "\n"
+            . 'php ' . escapeshellarg($this->repoRoot . '/packme') . ' < answer.txt' . "\n"
+            . 'RC=$?' . "\n"
+            . 'kill $SRV 2>/dev/null' . "\n"
+            . 'exit $RC' . "\n";
+        $this->writeFile($projectDir . '/run.sh', $script);
+
+        $run = $this->runCommand('sh run.sh', $projectDir);
+        $this->assertSame(0, $run->exitCode, 'AI packaging should succeed: ' . $run->combinedOutput());
+        $output = $run->combinedOutput();
+        $this->assertContains('AI packaging mode', $output, 'AI mode should start');
+        $this->assertContains('Packaging plan', $output, 'a plan should be shown before executing');
+        $this->assertContains('Verify: OK', $output, 'AI should report a passing deterministic verification');
+        $this->assertContains('packed uncommitted changes', $output, 'the finish summary should be shown');
+
+        $archive = $this->findSingleArchive($projectDir, '*_NOT_COMMIT_*.tar.gz');
+        $this->assertSame(
+            "<?php echo 'worktree';\n",
+            $this->extractTarEntry($archive, 'app/a.php', $projectDir),
+            'AI packaging should package the working tree content'
         );
     }
 

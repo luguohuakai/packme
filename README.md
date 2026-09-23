@@ -96,6 +96,7 @@ Please select packaging method:
       [7]: Pack the specified one-time commit
       [8]: Pack specified branch
       [9]: Pack specified path
+      [0]: AI packaging (chat with AI, confirm, then pack)
  Your choice (default [5]):
 ```
 
@@ -116,6 +117,55 @@ Please select packaging method:
 - 已修改文件打包的是**工作区当前内容**, 不是 HEAD 里的旧内容。
 - 新增文件需要先 `git add`, 否则会以警告形式列出且**不会**被包含。
 - 模式 4 依赖 `git diff HEAD`, 未跟踪文件天然不在差异里, 这是 Git 的行为而非工具缺陷。
+
+### AI 打包 (模式 0)
+
+> 需要 PHP 具备 `curl` 或开启 `allow_url_fopen`, 以及一个 DeepSeek API Key。缺少 `lib/` 时该选项不显示。
+
+选择 `[0]` 进入与 AI 的对话: 用自然语言描述要打包的内容, AI 会先读仓库(branch/HEAD/提交/变更文件/diff),
+给出**打包计划**, 经你确认后才真正执行; 执行完由 AI 做**确定性校验**, 并说明做了什么、下一步怎么部署。
+
+```text
+Your choice (default [5]): 0
+you> 把昨天那个修复打包一下
+AI calls tool: git_recent_commits
+AI calls tool: git_changed_files
+Packaging plan
+  Mode: 7 - one commit
+  new: 1a2b3c4
+  Reason: 匹配"昨天的修复"
+Execute this plan? (y/n) [default n]: y
+... 本地执行打包 ...
+Done
+  Archive: /path/to/project/dist/XXX_ONE_COMMIT_....tar.gz
+  Verify: OK  members: 12
+  Next: 解压后进入目录执行 php ./replaceme
+Tokens: prompt=..., completion=..., total=...
+```
+
+配置(`packme.ini`):
+
+```ini
+; 建议使用环境变量 DEEPSEEK_API_KEY, 优先级高于这里
+ai_api_key  = sk-xxxxxxxx
+ai_base_url = https://api.deepseek.com
+ai_model    = deepseek-flash
+ai_send_diff = 1          ; 1: 允许把 diff 发给模型(默认)  0: 只发文件名/提交信息
+ai_max_diff_bytes = 200000
+ai_max_turns = 12
+ai_stream = 1             ; 流式输出
+ai_temperature = 0.2
+ai_session_log = 1        ; 会话记录写入 ./dist/packme-ai-*.log
+```
+
+安全与边界:
+
+- **代码外发**: 默认 `ai_send_diff=1`, 会把变更 diff 发送给模型; 敏感项目请设为 `0`, 此时只发送文件名、提交信息与仓库元数据。
+- **执行权**: 模型不能执行 shell, 只能调用内置的只读工具(git 状态/日志/变更/目录/diff); 真正打包由本地 `PackmeRunner` 完成, 且必须人工 `y` 确认。
+- **校验**: 打包后由 `PackmeRunner::verifyArchive()` 做确定性检查(必需文件、期望文件、可疑路径、内容比对), 不是让模型"目测"。
+- **密钥**: 优先环境变量 `DEEPSEEK_API_KEY`; 若 `packme.ini` 被 git 跟踪且含 key 会给出告警, key 不会写入日志或压缩包。
+- **提示注入**: 提交信息/文件名/diff 一律按数据处理, 不会作为指令执行。
+- **失败兜底**: 网络或 API 异常会提示并退出 AI 模式, 不影响模式 1-9 的正常使用。
 
 ### 产物说明
 
