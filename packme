@@ -221,6 +221,8 @@ class Lang
         '      [7]: Pack the specified one-time commit' => '      [7]: 打包指定的某一次提交',
         '      [8]: Pack specified branch' => '      [8]: 打包指定分支',
         '      [9]: Pack specified path' => '      [9]: 打包指定目录或文件',
+        '      [0]: AI packaging (chat with AI, confirm, then pack)' => '      [0]: AI 打包(与 AI 对话, 确认后打包)',
+        'AI packaging is unavailable: lib/AiAgent.php is missing' => 'AI 打包不可用: 缺少 lib/AiAgent.php',
         'Your choice (default [5]):' => '请输入选项(默认 [5]):',
         'Please enter new commit id(<=) (default:HEAD):' => '请输入新 commit id(<=) (默认:HEAD):',
         'Please enter old commit id(>) (default:HEAD~1):' => '请输入旧 commit id(>) (默认:HEAD~1):',
@@ -277,6 +279,19 @@ class Lang
         'commit id does not exist or is not a commit: ' => 'commit id 不存在或不是一次提交: ',
         'Branch: ' => '分支: ',
         'Version: ' => '版本: ',
+        // AI 打包校验/接口错误(确定性校验的输出)
+        'archive not found: ' => '压缩包不存在: ',
+        'archive is empty' => '压缩包为空',
+        'cannot read archive: ' => '无法读取压缩包: ',
+        'archive has no members' => '压缩包内没有任何文件',
+        'missing required file: ' => '缺少必需文件: ',
+        'missing expected file(s): ' => '缺少期望文件: ',
+        'absolute member path: ' => '成员路径为绝对路径: ',
+        'unsafe member path: ' => '不安全的成员路径: ',
+        'content differs from working tree: ' => '内容与工作区不一致: ',
+        'cannot read archived content: ' => '无法读取压缩包内文件: ',
+        'HTTP error: ' => 'HTTP 错误: ',
+        'empty response from API' => 'API 返回内容为空',
     ];
 
     /**
