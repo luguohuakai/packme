@@ -12,7 +12,7 @@
  */
 
 // 工具版本, 发布时同步更新 CHANGELOG
-const PACKME_VERSION = '1.1.2';
+const PACKME_VERSION = '1.2.0';
 
 // 内置的项目名 -> 服务器绝对路径映射(srun 内部约定), 可用 packme.ini 的 object_path_map 覆盖或扩展
 const PACKME_OBJECT_PATH_MAP = [
